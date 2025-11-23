@@ -20,7 +20,7 @@ import forgotPasswordRoute from './routes/forgotPasswordRoute.js'
 dotenv.config()
 
 const app = express()
-const port = process.env.SERVER_PORT
+const port = process.env.PORT
 
 // Get __dirname equivalent for ES modules
 const __filename = fileURLToPath(import.meta.url)
