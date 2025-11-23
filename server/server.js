@@ -53,5 +53,6 @@ app.get("/", (req, res) => {
 
 app.listen(port, () => {
     console.log(`SERVER IS RUNNING ON PORT ${port}`)
+    console.log('Database Connection: ', process.env.DATABASE_URL)
     console.log(`Brevo email notifications: ${process.env.BREVO_API_KEY ? 'Enabled' : 'Disabled'}`)
 })
