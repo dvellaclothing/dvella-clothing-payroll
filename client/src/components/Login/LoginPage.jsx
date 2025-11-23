@@ -188,7 +188,7 @@ function LoginForm() {
                 </div>
 
                 {/* Google Login Button */}
-                <div className="w-full">
+                <div className="w-full flex flex-col items-center justify-center">
                     <GoogleLogin
                         onSuccess={handleGoogleSuccess}
                         onError={handleGoogleError}
