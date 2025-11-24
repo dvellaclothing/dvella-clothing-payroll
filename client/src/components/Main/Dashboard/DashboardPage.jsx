@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react"
-
 import Header from "../Header"
 import CardOne from "./Dashboard-Components/Card1"
+import CardTwo from "./Dashboard-Components/Card2"
+import CardThree from "./Dashboard-Components/Card3"
 import { API_URL } from "../../../config"
 
 const upIcon = "/images/up.png"
@@ -24,12 +25,18 @@ export default function DashboardPage({ pageLayout, currentUser }) {
     const [forecastConfidence, setForecastConfidence] = useState(0)
     const [forecastPeriod, setForecastPeriod] = useState("Q1 2025")
     
+    const [recentActivities, setRecentActivities] = useState([])
+    const [upcomingPayroll, setUpcomingPayroll] = useState(null)
+    
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
         fetchTotalEmployees()
         fetchMonthlyPayroll()
         fetchAvgKPIScores()
+        fetchGrowthForecast()
+        fetchRecentActivities()
+        fetchUpcomingPayroll()
     }, [])
 
     const fetchTotalEmployees = async () => {
@@ -94,6 +101,26 @@ export default function DashboardPage({ pageLayout, currentUser }) {
         }
     }
 
+    const fetchRecentActivities = async () => {
+        try {
+            const response = await fetch(`${API_URL}/api/get-recent-activities`)
+            const result = await response.json()
+            setRecentActivities(result.activities)
+        } catch (err) {
+            console.error("Error fetching recent activities: ", err)
+        }
+    }
+
+    const fetchUpcomingPayroll = async () => {
+        try {
+            const response = await fetch(`${API_URL}/api/get-upcoming-payroll`)
+            const result = await response.json()
+            setUpcomingPayroll(result)
+        } catch (err) {
+            console.error("Error fetching upcoming payroll: ", err)
+        }
+    }
+
     return(
         <>
             <div className={`${pageLayout ? 'col-span-5' : 'col-span-17 xl:col-start-2'} col-start-2 flex flex-col w-full min-h-full`}>
@@ -103,6 +130,8 @@ export default function DashboardPage({ pageLayout, currentUser }) {
                         <h2 className="text-md font-medium">Good morning, {currentUser.first_name}</h2>
                         <p className="font-sans text-sm text-[rgba(0,0,0,0.6)]">Here's what's happening at your company today</p>
                     </div>
+                    
+                    {/* Metrics Cards */}
                     <CardOne
                         cardTitle="Total Employees"
                         cardValue={loading ? "..." : totalEmployees}
@@ -112,10 +141,10 @@ export default function DashboardPage({ pageLayout, currentUser }) {
                     />
                     <CardOne
                         cardTitle="Monthly Payroll"
-                        cardValue={loading ? "..." : `₱${monthlyPayroll}`}
+                        cardValue={loading ? "..." : `₱${monthlyPayroll.toLocaleString()}`}
                         cardImage={payrollPercentage >= 0 ? upIcon : downIcon}
-                        changes={loading ? "..." : `${payrollPercentage >= 0 ? '+' : '-'}${payrollPercentage}%`}
-                        cardDescription="On schedule for UNDEFINED"
+                        changes={loading ? "..." : `${payrollPercentage >= 0 ? '+' : ''}${payrollPercentage}%`}
+                        cardDescription={loading ? "..." : `${payrollPercentage >= 0 ? 'Increase' : 'Decrease'} from last month`}
                     />
                     <CardOne
                         cardTitle="Avg KPI Score"
@@ -124,13 +153,10 @@ export default function DashboardPage({ pageLayout, currentUser }) {
                         changes={loading ? "..." : `${kpiPercentage >= 0 ? '+' : ''}${kpiPercentage}%`}
                         cardDescription={loading ? "..." : avgKPIScore >= 85 ? "Above target of 85%" : "Below target of 85%"}
                     />
-                    <CardOne
-                        cardTitle="Growth Forecast"
-                        cardValue={loading ? "..." : `${growthForecast}%`}
-                        cardImage=""
-                        changes={forecastPeriod}
-                        cardDescription={loading ? "..." : `ML prediction confidence: ${forecastConfidence}%`}
-                    />
+                    
+                    {/* New Panels */}
+                    <CardTwo activities={recentActivities} loading={loading} />
+                    <CardThree payroll={upcomingPayroll} loading={loading} />
                 </div>
             </div>
         </>
