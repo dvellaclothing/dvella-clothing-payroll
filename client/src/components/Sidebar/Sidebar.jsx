@@ -88,8 +88,8 @@ export default function Sidebar({ onAction }) {
                                     : <p className="text-sans font-medium text-2xl text-white">{initials}</p>
                                 }
                             </div>
-                            <div className={`${sidebarStatus ? 'hidden xl:flex' : 'flex xl:hidden'} flex-col items-start justify-start h-10`}>
-                                <h2 className="text-sans font-medium text-sm">{user.first_name} {user.last_name}</h2>
+                            <div className={`${sidebarStatus ? 'hidden xl:flex' : 'flex xl:hidden'} flex-col items-start justify-start h-10 overflow-hidden`}>
+                                <h2 className="text-sans font-medium text-sm whitespace-nowrap overflow-hidden text-ellipsis">{user.first_name} {user.last_name}</h2>
                                 <p className="text-sm text-[rgba(0,0,0,0.5)] text-sans">{user.role}</p>
                             </div>
                         </div>
