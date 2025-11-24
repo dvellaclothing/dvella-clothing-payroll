@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google'
 import { jwtDecode } from 'jwt-decode'
@@ -14,9 +14,22 @@ function LoginForm() {
     const navigate = useNavigate()
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
+    const [rememberMe, setRememberMe] = useState(false)
     const [showPassword, setShowPassword] = useState(false)
     const [errorMessage, setErrorMessage] = useState("")
     const [loading, setLoading] = useState(false)
+
+    // Load remembered credentials on component mount
+    useEffect(() => {
+        const rememberedEmail = localStorage.getItem("rememberedEmail")
+        const rememberedPassword = localStorage.getItem("rememberedPassword")
+        
+        if (rememberedEmail && rememberedPassword) {
+            setEmail(rememberedEmail)
+            setPassword(rememberedPassword)
+            setRememberMe(true)
+        }
+    }, [])
 
     const handleLogin = async (e) => {
         e.preventDefault()
@@ -38,6 +51,15 @@ function LoginForm() {
                 setErrorMessage(data.message)
                 setLoading(false)
             } else {
+                // Handle Remember Me
+                if (rememberMe) {
+                    localStorage.setItem("rememberedEmail", email)
+                    localStorage.setItem("rememberedPassword", password)
+                } else {
+                    localStorage.removeItem("rememberedEmail")
+                    localStorage.removeItem("rememberedPassword")
+                }
+
                 localStorage.setItem("user", JSON.stringify(data.user))
                 const user = JSON.parse(localStorage.getItem('user'))
                 if (user.role === 'admin') {
@@ -58,10 +80,8 @@ function LoginForm() {
             setLoading(true)
             setErrorMessage("")
             
-            // Decode the JWT token from Google
             const decoded = jwtDecode(credentialResponse.credential)
             
-            // Send to your backend
             const response = await fetch(`${API_URL}/api/google-login`, {
                 method: "POST",
                 headers: {
@@ -163,7 +183,12 @@ function LoginForm() {
 
                     <div className="flex flex-row items-center justify-between w-full text-sm">
                         <label className="flex flex-row items-center gap-2 cursor-pointer">
-                            <input type="checkbox" className="cursor-pointer w-4 h-4" />
+                            <input 
+                                type="checkbox" 
+                                className="cursor-pointer w-4 h-4"
+                                checked={rememberMe}
+                                onChange={(e) => setRememberMe(e.target.checked)}
+                            />
                             <span className="text-gray-600">Remember me</span>
                         </label>
                         <a href="/reset-password" className="font-medium text-black hover:underline">
@@ -192,7 +217,6 @@ function LoginForm() {
                     <GoogleLogin
                         onSuccess={handleGoogleSuccess}
                         onError={handleGoogleError}
-                        // useOneTap
                         theme="outline"
                         size="large"
                         text="continue_with"
