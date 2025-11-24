@@ -8,9 +8,10 @@ import EmployeeStocks from './Stocks/Employee-Stocks'
 import EmployeeProfile from './Profile/Employee-Profile'
 import EmployeePayslips from './Payslips/Employee-Payslips'
 import EmployeeAttendance from './Attendance/Employee-Attendance'
-import EmployeeKPI from './KPI/Employee-KPI'
 import EmployeeSettings from './Settings/Employee-Settings'
 import EmployeeHelp from './Help/Employee-Help'
+import EmployeeKPI from './KPI/Employee-KPI'
+import NotificationsPage from './NotificationPage'
 
 export default function EmployeeMainBody() {
     const user = JSON.parse(localStorage.getItem("user"))
@@ -34,6 +35,7 @@ export default function EmployeeMainBody() {
                 <Route path="kpi" element={<EmployeeKPI pageLayout={sidebarData} currentUser={user} />} />
                 <Route path="settings" element={<EmployeeSettings pageLayout={sidebarData} currentUser={user} />} />
                 <Route path="help" element={<EmployeeHelp pageLayout={sidebarData} currentUser={user} />} />
+                <Route path="notifications" element={<NotificationsPage pageLayout={true} currentUser={user} />} />
             </Routes>
         </div>
     )

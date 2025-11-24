@@ -208,4 +208,153 @@ router.get("/overall-metrics", async (req, res) => {
     }
 })
 
+// Get individual employee KPI data
+router.get("/:user_id", async (req, res) => {
+    try {
+        const { user_id } = req.params
+        
+        // Get current month data
+        const currentMonthResult = await pool.query(`
+            SELECT 
+                COUNT(DISTINCT CASE 
+                    WHEN a.status = 'approved' 
+                    THEN a.date 
+                END) as days_present,
+                COALESCE(SUM(CASE 
+                    WHEN a.status = 'approved' 
+                    THEN a.total_hours 
+                    ELSE 0 
+                END), 0) as total_hours,
+                COALESCE(AVG(CASE 
+                    WHEN a.status = 'approved' 
+                    THEN a.total_hours 
+                END), 0) as avg_hours_per_day,
+                COALESCE(SUM(CASE 
+                    WHEN a.status = 'approved' AND a.total_hours > 8
+                    THEN a.total_hours - 8
+                    ELSE 0 
+                END), 0) as overtime_hours
+            FROM attendance a
+            WHERE a.user_id = $1
+                AND a.status = 'approved'
+                AND EXTRACT(MONTH FROM a.date) = EXTRACT(MONTH FROM CURRENT_DATE)
+                AND EXTRACT(YEAR FROM a.date) = EXTRACT(YEAR FROM CURRENT_DATE)
+        `, [user_id])
+        
+        const currentMonth = currentMonthResult.rows[0]
+        
+        // Get employee info
+        const employeeResult = await pool.query(`
+            SELECT first_name, last_name, position, hourly_rate
+            FROM users
+            WHERE user_id = $1
+        `, [user_id])
+        
+        if (employeeResult.rows.length === 0) {
+            return res.status(404).json({ message: 'Employee not found' })
+        }
+        
+        const employee = employeeResult.rows[0]
+        
+        // Calculate working days in current month
+        const workingDaysResult = await pool.query(`
+            SELECT EXTRACT(DAY FROM DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month' - INTERVAL '1 day') as days
+        `)
+        const workingDays = parseFloat(workingDaysResult.rows[0].days)
+        
+        // Define KPI targets
+        const targets = {
+            hoursPerMonth: 160, // Standard 8 hours/day * 20 working days
+            attendanceRate: 95, // 95% attendance target
+            avgHoursPerDay: 8, // 8 hours per day target
+            overtimeLimit: 20 // Max 20 hours overtime per month
+        }
+        
+        // Calculate actual values
+        const totalHours = parseFloat(currentMonth.total_hours)
+        const daysPresent = parseInt(currentMonth.days_present)
+        const avgHoursPerDay = parseFloat(currentMonth.avg_hours_per_day)
+        const overtimeHours = parseFloat(currentMonth.overtime_hours)
+        const attendanceRate = (daysPresent / workingDays) * 100
+        
+        // Calculate scores (0-100 scale)
+        const hoursScore = Math.min((totalHours / targets.hoursPerMonth) * 100, 100)
+        const attendanceScore = Math.min((attendanceRate / targets.attendanceRate) * 100, 100)
+        const avgHoursScore = Math.min((avgHoursPerDay / targets.avgHoursPerDay) * 100, 100)
+        const overtimeScore = overtimeHours <= targets.overtimeLimit ? 100 : Math.max(100 - ((overtimeHours - targets.overtimeLimit) * 2), 0)
+        
+        // Calculate weighted overall score
+        const weights = {
+            hours: 40,
+            attendance: 30,
+            avgHours: 20,
+            overtime: 10
+        }
+        
+        const overallScore = (
+            (hoursScore * weights.hours / 100) +
+            (attendanceScore * weights.attendance / 100) +
+            (avgHoursScore * weights.avgHours / 100) +
+            (overtimeScore * weights.overtime / 100)
+        )
+        
+        // Build metrics array
+        const metrics = [
+            {
+                name: 'Total Working Hours',
+                score: totalHours,
+                target_value: targets.hoursPerMonth,
+                weight: weights.hours,
+                unit: 'hours',
+                description: 'Total hours worked this month'
+            },
+            {
+                name: 'Attendance Rate',
+                score: attendanceRate,
+                target_value: targets.attendanceRate,
+                weight: weights.attendance,
+                unit: '%',
+                description: 'Percentage of days present'
+            },
+            {
+                name: 'Average Hours per Day',
+                score: avgHoursPerDay,
+                target_value: targets.avgHoursPerDay,
+                weight: weights.avgHours,
+                unit: 'hours',
+                description: 'Average working hours per attendance day'
+            },
+            {
+                name: 'Overtime Management',
+                score: overtimeScore,
+                target_value: 100,
+                weight: weights.overtime,
+                unit: 'score',
+                description: `${overtimeHours.toFixed(1)}h overtime (target: max ${targets.overtimeLimit}h)`
+            }
+        ]
+        
+        return res.json({
+            employee: {
+                name: `${employee.first_name} ${employee.last_name}`,
+                position: employee.position,
+                hourly_rate: employee.hourly_rate
+            },
+            overallScore: parseFloat(overallScore.toFixed(1)),
+            maxScore: 100,
+            metrics: metrics,
+            summary: {
+                total_hours: totalHours,
+                days_present: daysPresent,
+                working_days: workingDays,
+                attendance_rate: parseFloat(attendanceRate.toFixed(1)),
+                overtime_hours: overtimeHours
+            }
+        })
+    } catch (err) {
+        console.error('Error in employee KPI:', err)
+        return res.status(500).json({ error: err.message })
+    }
+})
+
 export default router

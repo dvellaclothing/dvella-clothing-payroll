@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from "react"
+import { useNavigate } from "react-router-dom"  // Add this import
 import { API_URL } from "../../config"
 
 const notificationIcon = "/images/notification.png"
 
 export default function Header({ pageLayout, pageTitle, pageDescription, currentUser }) {
+    const navigate = useNavigate()  // Add this
     const [notifications, setNotifications] = useState([])
     const [unreadCount, setUnreadCount] = useState(0)
     const [showNotifications, setShowNotifications] = useState(false)
@@ -99,6 +101,29 @@ export default function Header({ pageLayout, pageTitle, pageDescription, current
         }
     }
 
+    // Add this function to handle notification click with navigation
+    const handleNotificationItemClick = (notification) => {
+        // Mark as read if unread
+        if (!notification.is_read) {
+            markAsRead(notification.notification_id)
+        }
+        
+        // Navigate to link_url if it exists
+        if (notification.link_url) {
+            setShowNotifications(false)
+            navigate(`/employee${notification.link_url}`)
+        }
+    }
+
+    // Add this function to navigate to notifications page
+    const goToNotificationsPage = () => {
+        setShowNotifications(false)
+        const notificationsPath = currentUser?.role === 'admin' 
+            ? '/admin/notifications' 
+            : '/employee/notifications'
+        navigate(notificationsPath)
+    }
+
     const formatTimeAgo = (dateString) => {
         const date = new Date(dateString)
         const now = new Date()
@@ -190,14 +215,7 @@ export default function Header({ pageLayout, pageTitle, pageDescription, current
                                     notifications.map((notification) => (
                                         <div
                                             key={notification.notification_id}
-                                            onClick={() => {
-                                                if (!notification.is_read) {
-                                                    markAsRead(notification.notification_id)
-                                                }
-                                                if (notification.link_url) {
-                                                    window.location.href = notification.link_url
-                                                }
-                                            }}
+                                            onClick={() => handleNotificationItemClick(notification)}
                                             className={`flex gap-3 px-4 py-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition ${
                                                 !notification.is_read ? 'bg-blue-50' : ''
                                             }`}
@@ -232,9 +250,7 @@ export default function Header({ pageLayout, pageTitle, pageDescription, current
                             {notifications.length > 0 && (
                                 <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
                                     <button
-                                        onClick={() => {
-                                            setShowNotifications(false)
-                                        }}
+                                        onClick={goToNotificationsPage}
                                         className="text-xs text-blue-600 hover:text-blue-800 font-medium w-full text-center"
                                     >
                                         View all notifications
@@ -254,7 +270,7 @@ export default function Header({ pageLayout, pageTitle, pageDescription, current
                             <p className="font-medium text-xs text-white">{initials}</p>
                         )}
                     </div>
-                    <h2 className="font-normal text-sm">{currentUser?.first_name} {currentUser?.last_name}</h2>
+                    <h2 className="font-normal text-sm truncate">{currentUser?.first_name} {currentUser?.last_name}</h2>
                 </button>
             </div>
         </div>

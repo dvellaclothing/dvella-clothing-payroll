@@ -14,6 +14,7 @@ const attendanceIcon = "/images/performance.png"
 const settingsIcon = "/images/settings.png"
 const helpIcon = "/images/help.png"
 const signoutIcon = "/images/signout.png"
+const kpiIcon = "/images/kpi.png"
 
 export default function EmployeeSidebar({ onAction }) {
     const navigate = useNavigate()
@@ -63,6 +64,7 @@ export default function EmployeeSidebar({ onAction }) {
                         <NavLink sidebarStatus={sidebarStatus} image={profileIcon} title="Profile" link="/employee/profile" />
                         <NavLink sidebarStatus={sidebarStatus} image={payslipsIcon} title="Payslips" link="/employee/payslips" />
                         <NavLink sidebarStatus={sidebarStatus} image={attendanceIcon} title="Attendance" link="/employee/attendance" />
+                        <NavLink sidebarStatus={sidebarStatus} image={kpiIcon} title="KPI" link="/employee/kpi" />
                     </div>
                 </div>
             </div>

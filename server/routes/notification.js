@@ -223,4 +223,38 @@ router.get('/notifications/:user_id/unread-count', async (req, res) => {
     }
 })
 
+// Get all notifications (not just recent ones)
+router.get("/notifications/:userId/all", async (req, res) => {
+    try {
+        const { userId } = req.params
+        
+        const result = await pool.query(`
+            SELECT * FROM notifications
+            WHERE user_id = $1
+            ORDER BY created_at DESC
+        `, [userId])
+        
+        res.json({ notifications: result.rows })
+    } catch (err) {
+        console.error('Error fetching all notifications:', err)
+        res.status(500).json({ error: err.message })
+    }
+})
+
+// Delete notification
+router.delete("/notifications/:notificationId", async (req, res) => {
+    try {
+        const { notificationId } = req.params
+        
+        await pool.query(`
+            DELETE FROM notifications WHERE notification_id = $1
+        `, [notificationId])
+        
+        res.json({ message: 'Notification deleted' })
+    } catch (err) {
+        console.error('Error deleting notification:', err)
+        res.status(500).json({ error: err.message })
+    }
+})
+
 export default router

@@ -12,6 +12,7 @@ import UserSettings from './UserSettings/UserSettings'
 import HelpPage from './Help/Help'
 import Profile from './Profile/Profile'
 import KPIPage from './KPI/KPI'
+import NotificationsPage from '../Employee_Side/NotificationPage'
 
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 
@@ -39,6 +40,7 @@ export default function MainBody() {
                     <Route path="help" element={<HelpPage pageLayout={sidebarData} currentUser={user} />} />
                     <Route path="profile" element={<Profile pageLayout={sidebarData} currentUser={user} />} />
                     <Route path="kpi" element={<KPIPage pageLayout={sidebarData} currentUser={user} />} />
+                    <Route path="notifications" element={<NotificationsPage pageLayout={true} currentUser={user} />} />
                 </Routes>
             </div>
         </>

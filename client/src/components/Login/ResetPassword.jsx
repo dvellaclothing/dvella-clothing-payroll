@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import Swal from "sweetalert2"
+import { API_URL } from "../../config"
 
 const backIcon = "/images/back.png"
 const emailIcon = "/images/email.png"
@@ -31,7 +32,7 @@ export default function ResetPassword() {
         
         setLoading(true)
         try {
-            const res = await fetch("http://localhost:5000/api/forgot-password", {
+            const res = await fetch(`${API_URL}/api/forgot-password`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email }),
@@ -59,7 +60,7 @@ export default function ResetPassword() {
         
         setLoading(true)
         try {
-            const res = await fetch("http://localhost:5000/api/forgot-password", {
+            const res = await fetch(`${API_URL}/api/forgot-password`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email }),
@@ -98,7 +99,7 @@ export default function ResetPassword() {
 
         setLoading(true)
         try {
-            const res = await fetch("http://localhost:5000/api/reset-password", {
+            const res = await fetch(`${API_URL}/api/reset-password`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, code, newPassword }),
