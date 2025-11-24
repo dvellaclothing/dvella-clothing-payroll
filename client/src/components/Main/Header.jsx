@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react"
+import { API_URL } from "../../config"
 
 const notificationIcon = "/images/notification.png"
-const API_URL = "http://localhost:5000" // Update with your actual API URL
 
 export default function Header({ pageLayout, pageTitle, pageDescription, currentUser }) {
     const [notifications, setNotifications] = useState([])

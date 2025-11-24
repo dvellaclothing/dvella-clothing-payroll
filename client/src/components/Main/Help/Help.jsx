@@ -31,25 +31,10 @@ export default function HelpPage({ pageLayout, currentUser }) {
             answer: 'Visit the Profile page where you can update your contact details, address, and profile picture. Employment information like position and pay grade cannot be changed.'
         },
         {
-            category: 'KPI',
-            question: 'How is my KPI score calculated?',
-            answer: 'Your KPI score is calculated based on multiple weighted metrics set by your manager. Each metric has a target value, and your performance is measured against these targets.'
-        },
-        {
             category: 'General',
             question: 'How do I change my password?',
             answer: 'Go to Settings > Change Password tab. Enter your current password and your new password twice to confirm the change.'
         },
-        {
-            category: 'POS',
-            question: 'How do I process a sale?',
-            answer: 'Navigate to Sales/POS, search for products, add them to the cart, adjust quantities as needed, and click Checkout to complete the transaction.'
-        },
-        {
-            category: 'Stocks',
-            question: 'Can I see inventory levels?',
-            answer: 'Yes, visit the Stocks page to view all products, their current quantities, and stock status (In Stock, Low Stock, Out of Stock).'
-        }
     ]
 
     const categories = ['all', ...Array.from(new Set(faqs.map(faq => faq.category)))]
