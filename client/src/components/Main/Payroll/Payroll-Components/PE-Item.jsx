@@ -74,7 +74,7 @@ export default function PEItem({ employee, periodId }) {
         doc.text('EARNINGS', 25, currentY + 7)
         
         const earningsData = [
-            ['Basic Salary', formatCurrency(payslipData.salary)],
+            ['Hourly Rate', formatCurrency(payslipData.hourly_rate)],
         ]
         
         if (payslipData.bonuses && parseFloat(payslipData.bonuses) > 0) {
@@ -204,7 +204,7 @@ export default function PEItem({ employee, periodId }) {
                 {employee.first_name} {employee.last_name}
             </p>
             <p className="col-span-1 font-normal text-sm">
-                ₱{parseFloat(employee.basic_salary || 0).toLocaleString()}
+                ₱{parseFloat(employee.hourly_rate || 0).toLocaleString()}
             </p>
             <p className="col-span-1 font-normal text-sm">
                 {parseFloat(employee.hours_worked || 0).toFixed(1)}

@@ -114,7 +114,7 @@ export default function PayrollPage({ pageLayout, currentUser }) {
         const tableData = payrollData.employees.map(emp => [
             `${emp.first_name} ${emp.last_name}`,
             emp.employee_id,
-            formatCurrency(emp.basic_salary),
+            formatCurrency(emp.hourly_rate),
             parseFloat(emp.hours_worked || 0).toFixed(1),
             formatCurrency(emp.deductions),
             formatCurrency(emp.overtime_amount),
@@ -133,7 +133,7 @@ export default function PayrollPage({ pageLayout, currentUser }) {
         
         autoTable(doc, {
             startY: 50,
-            head: [['Employee Name', 'Employee ID', 'Basic Salary', 'Hours', 'Deductions', 'Overtime', 'Net Pay']],
+            head: [['Employee Name', 'Employee ID', 'Hourly Rate', 'Hours', 'Deductions', 'Overtime', 'Net Pay']],
             body: tableData,
             theme: 'striped',
             headStyles: {
@@ -264,7 +264,7 @@ export default function PayrollPage({ pageLayout, currentUser }) {
                         <div className="flex flex-col min-w-[1000px]">
                             <div className="grid grid-cols-7 gap-4 w-full items-center justify-center h-10 px-2">
                                 <p className="col-span-1 font-medium text-sm">Employee Name</p>
-                                <p className="col-span-1 font-medium text-sm">Basic Salary</p>
+                                <p className="col-span-1 font-medium text-sm">Hourly Rate</p>
                                 <p className="col-span-1 font-medium text-sm">Hours Worked</p>
                                 <p className="col-span-1 font-medium text-sm">Deductions</p>
                                 <p className="col-span-1 font-medium text-sm">Overtime</p>

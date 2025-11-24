@@ -7,7 +7,6 @@ import { fileURLToPath } from 'url'
 import authRoutes from './routes/auth.js'
 import dashboardAnalytics from './routes/dashboard-analytics.js'
 import employeesRoute from './routes/employees-route.js'
-// import attendanceRoute from './routes/attendanceRoute.js'
 import kpiRoute from './routes/kpiRoute.js'
 import payrollRoute from './routes/payrollRoute.js'
 import performanceRoute from './routes/performance.js'
@@ -38,7 +37,7 @@ app.use('/api', authRoutes)
 app.use('/api', dashboardAnalytics)
 app.use('/api', employeesRoute)
 // app.use('/api', attendanceRoute)
-app.use('/api', kpiRoute)
+app.use('/api/kpi', kpiRoute)
 app.use('/api', payrollRoute)
 app.use('/api/attendance', performanceRoute)
 app.use('/api/reports', reportsRoute)
