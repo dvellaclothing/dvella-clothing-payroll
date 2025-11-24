@@ -264,4 +264,207 @@ router.get("/get-upcoming-payroll", async (req, res) => {
     }
 })
 
+router.get("/employee-attendance/:user_id", async (req, res) => {
+    try {
+        const { user_id } = req.params
+        
+        const currentMonth = await pool.query(`
+            SELECT 
+                COUNT(DISTINCT CASE WHEN status = 'approved' THEN date END) as present_days,
+                COUNT(DISTINCT CASE WHEN status = 'pending' THEN date END) as pending_days,
+                COALESCE(SUM(CASE WHEN status = 'approved' THEN total_hours ELSE 0 END), 0) as total_hours,
+                COALESCE(AVG(CASE WHEN status = 'approved' THEN total_hours END), 0) as avg_hours_per_day
+            FROM attendance
+            WHERE user_id = $1
+                AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE)
+                AND EXTRACT(YEAR FROM date) = EXTRACT(YEAR FROM CURRENT_DATE)
+        `, [user_id])
+        
+        const lastMonth = await pool.query(`
+            SELECT 
+                COUNT(DISTINCT CASE WHEN status = 'approved' THEN date END) as present_days,
+                COALESCE(SUM(CASE WHEN status = 'approved' THEN total_hours ELSE 0 END), 0) as total_hours
+            FROM attendance
+            WHERE user_id = $1
+                AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 month')
+                AND EXTRACT(YEAR FROM date) = EXTRACT(YEAR FROM CURRENT_DATE - INTERVAL '1 month')
+        `, [user_id])
+        
+        const workingDays = await pool.query(`
+            SELECT EXTRACT(DAY FROM DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month' - INTERVAL '1 day') as days
+        `)
+        
+        const currentData = currentMonth.rows[0]
+        const lastData = lastMonth.rows[0]
+        const totalWorkingDays = parseInt(workingDays.rows[0].days)
+        
+        return res.json({
+            currentMonth: {
+                present_days: parseInt(currentData.present_days) || 0,
+                pending_days: parseInt(currentData.pending_days) || 0,
+                total_hours: parseFloat(currentData.total_hours) || 0,
+                avg_hours_per_day: parseFloat(currentData.avg_hours_per_day) || 0,
+                working_days: totalWorkingDays,
+                attendance_rate: totalWorkingDays > 0 ? ((parseInt(currentData.present_days) / totalWorkingDays) * 100).toFixed(1) : 0
+            },
+            lastMonth: {
+                present_days: parseInt(lastData.present_days) || 0,
+                total_hours: parseFloat(lastData.total_hours) || 0
+            }
+        })
+    } catch (err) {
+        console.error('Error in employee-attendance:', err)
+        return res.status(500).json({ error: err.message })
+    }
+})
+
+router.get("/employee-recent-activity/:user_id", async (req, res) => {
+    try {
+        const { user_id } = req.params
+        
+        const result = await pool.query(`
+            SELECT 
+                'attendance' as activity_type,
+                a.date,
+                a.status,
+                a.total_hours,
+                a.created_at,
+                'Attendance for ' || TO_CHAR(a.date, 'Mon DD, YYYY') as description
+            FROM attendance a
+            WHERE a.user_id = $1
+                AND a.created_at >= CURRENT_DATE - INTERVAL '14 days'
+            
+            UNION ALL
+            
+            SELECT 
+                'leave' as activity_type,
+                lr.start_date as date,
+                lr.status,
+                NULL as total_hours,
+                lr.created_at,
+                'Leave request: ' || lr.leave_type as description
+            FROM leave_requests lr
+            WHERE lr.user_id = $1
+                AND lr.created_at >= CURRENT_DATE - INTERVAL '14 days'
+            
+            ORDER BY created_at DESC
+            LIMIT 10
+        `, [user_id])
+        
+        return res.json({ activities: result.rows })
+    } catch (err) {
+        console.error('Error in employee-recent-activity:', err)
+        return res.status(500).json({ error: err.message })
+    }
+})
+
+// Get employee next payroll info
+router.get("/employee-next-payroll/:user_id", async (req, res) => {
+    try {
+        const { user_id } = req.params
+        
+        // Get next payroll period
+        const nextPeriod = await pool.query(`
+            SELECT 
+                period_id,
+                period_name,
+                start_date,
+                end_date,
+                pay_date,
+                status
+            FROM payroll_periods
+            WHERE pay_date >= CURRENT_DATE
+            ORDER BY pay_date ASC
+            LIMIT 1
+        `)
+        
+        if (nextPeriod.rows.length === 0) {
+            return res.json({ 
+                period: null,
+                message: 'No upcoming payroll periods found' 
+            })
+        }
+        
+        const period = nextPeriod.rows[0]
+        
+        // Get employee's data
+        const userData = await pool.query(`
+            SELECT hourly_rate, position
+            FROM users
+            WHERE user_id = $1
+        `, [user_id])
+        
+        // Calculate employee's expected pay for this period
+        const hoursWorked = await pool.query(`
+            SELECT 
+                COALESCE(SUM(CASE WHEN status = 'approved' THEN total_hours ELSE 0 END), 0) as total_hours,
+                COALESCE(SUM(CASE 
+                    WHEN status = 'approved' AND total_hours > 8 
+                    THEN total_hours - 8 
+                    ELSE 0 
+                END), 0) as overtime_hours
+            FROM attendance
+            WHERE user_id = $1
+                AND date BETWEEN $2 AND $3
+        `, [user_id, period.start_date, period.end_date])
+        
+        const user = userData.rows[0]
+        const hours = hoursWorked.rows[0]
+        const hourlyRate = parseFloat(user.hourly_rate) || 0
+        const regularHours = parseFloat(hours.total_hours) - parseFloat(hours.overtime_hours)
+        const overtimeHours = parseFloat(hours.overtime_hours)
+        
+        const regularPay = regularHours * hourlyRate
+        const overtimePay = overtimeHours * hourlyRate * 1.5
+        const grossPay = regularPay + overtimePay
+        const estimatedNet = grossPay * 0.85 // Assuming 15% deductions
+        
+        return res.json({
+            period: {
+                ...period,
+                hours_worked: parseFloat(hours.total_hours),
+                overtime_hours: overtimeHours,
+                estimated_gross: parseFloat(grossPay.toFixed(2)),
+                estimated_net: parseFloat(estimatedNet.toFixed(2))
+            }
+        })
+    } catch (err) {
+        console.error('Error in employee-next-payroll:', err)
+        return res.status(500).json({ error: err.message })
+    }
+})
+
+// Get employee pending requests count
+router.get("/employee-pending-requests/:user_id", async (req, res) => {
+    try {
+        const { user_id } = req.params
+        
+        const result = await pool.query(`
+            SELECT 
+                COUNT(*) FILTER (WHERE type = 'attendance') as pending_attendance,
+                COUNT(*) FILTER (WHERE type = 'leave') as pending_leave
+            FROM (
+                SELECT 'attendance' as type
+                FROM attendance
+                WHERE user_id = $1 AND status = 'pending'
+                
+                UNION ALL
+                
+                SELECT 'leave' as type
+                FROM leave_requests
+                WHERE user_id = $1 AND status = 'pending'
+            ) as combined
+        `, [user_id])
+        
+        return res.json({
+            pending_attendance: parseInt(result.rows[0].pending_attendance) || 0,
+            pending_leave: parseInt(result.rows[0].pending_leave) || 0,
+            total_pending: (parseInt(result.rows[0].pending_attendance) || 0) + (parseInt(result.rows[0].pending_leave) || 0)
+        })
+    } catch (err) {
+        console.error('Error in employee-pending-requests:', err)
+        return res.status(500).json({ error: err.message })
+    }
+})
+
 export default router

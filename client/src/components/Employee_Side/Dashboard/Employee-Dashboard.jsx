@@ -1,7 +1,9 @@
-// Employee-Dashboard.jsx
 import { useState, useEffect } from "react"
 import { API_URL } from "../../../config"
 import Header from "../../Main/Header"
+import EmployeeActivityCard from "./Dashboard-Components/EmployeeActivityCard"
+import EmployeePayrollCard from "./Dashboard-Components/EmployeePayrollCard"
+import PendingRequestsCard from "./Dashboard-Components/PendingRequestsCard"
 
 const attendanceIcon = "/images/performance.png"
 const payrollIcon = "/images/payroll.png"
@@ -11,7 +13,9 @@ export default function EmployeeDashboard({ pageLayout, currentUser }) {
     const [dashboardData, setDashboardData] = useState({
         attendance: null,
         kpi: null,
-        recentPayslip: null
+        recentActivity: [],
+        nextPayroll: null,
+        pendingRequests: null
     })
     const [loading, setLoading] = useState(true)
 
@@ -21,17 +25,26 @@ export default function EmployeeDashboard({ pageLayout, currentUser }) {
 
     const fetchDashboardData = async () => {
         try {
-            const [attendanceRes, kpiRes] = await Promise.all([
-                fetch(`${API_URL}/api/attendance/${currentUser.user_id}`),
-                fetch(`${API_URL}/api/kpi/${currentUser.user_id}`)
+            const [attendanceRes, kpiRes, activityRes, payrollRes, pendingRes] = await Promise.all([
+                fetch(`${API_URL}/api/employee-attendance/${currentUser.user_id}`),
+                fetch(`${API_URL}/api/kpi/${currentUser.user_id}`),
+                fetch(`${API_URL}/api/employee-recent-activity/${currentUser.user_id}`),
+                fetch(`${API_URL}/api/employee-next-payroll/${currentUser.user_id}`),
+                fetch(`${API_URL}/api/employee-pending-requests/${currentUser.user_id}`)
             ])
 
             const attendance = await attendanceRes.json()
             const kpi = await kpiRes.json()
+            const activity = await activityRes.json()
+            const payroll = await payrollRes.json()
+            const pending = await pendingRes.json()
 
             setDashboardData({
                 attendance,
-                kpi
+                kpi,
+                recentActivity: activity.activities || [],
+                nextPayroll: payroll,
+                pendingRequests: pending
             })
         } catch (error) {
             console.error('Error fetching dashboard data:', error)
@@ -50,6 +63,7 @@ export default function EmployeeDashboard({ pageLayout, currentUser }) {
                     <p className="text-sm text-[rgba(0,0,0,0.6)]">Here's your overview for today</p>
                 </div>
 
+                {/* Metrics Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full">
                     <div className="relative flex flex-col items-start justify-between h-40 w-full bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
                         <img src={attendanceIcon} className="absolute top-5 right-5 h-8 w-auto opacity-20" alt="Attendance" />
@@ -63,7 +77,10 @@ export default function EmployeeDashboard({ pageLayout, currentUser }) {
                                         {dashboardData.attendance?.currentMonth?.present_days || 0}
                                     </p>
                                     <p className="text-sm text-[rgba(0,0,0,0.6)]">
-                                        Days present this month
+                                        Days present / {dashboardData.attendance?.currentMonth?.working_days || 0}
+                                    </p>
+                                    <p className="text-xs text-green-600 font-medium mt-1">
+                                        {dashboardData.attendance?.currentMonth?.attendance_rate || 0}% attendance rate
                                     </p>
                                 </>
                             )}
@@ -79,10 +96,15 @@ export default function EmployeeDashboard({ pageLayout, currentUser }) {
                             ) : (
                                 <>
                                     <p className="text-3xl font-bold">
-                                        {dashboardData.kpi?.overallScore || 0}
+                                        {dashboardData.kpi?.overallScore?.toFixed(1) || 0}
                                     </p>
                                     <p className="text-sm text-[rgba(0,0,0,0.6)]">
                                         Out of {dashboardData.kpi?.maxScore || 100}
+                                    </p>
+                                    <p className={`text-xs font-medium mt-1 ${
+                                        (dashboardData.kpi?.overallScore || 0) >= 85 ? 'text-green-600' : 'text-orange-600'
+                                    }`}>
+                                        {(dashboardData.kpi?.overallScore || 0) >= 85 ? 'Great performance!' : 'Keep improving!'}
                                     </p>
                                 </>
                             )}
@@ -99,6 +121,16 @@ export default function EmployeeDashboard({ pageLayout, currentUser }) {
                     </div>
                 </div>
 
+                {/* Two-Column Layout for New Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full">
+                    <EmployeePayrollCard payroll={dashboardData.nextPayroll} loading={loading} />
+                    <PendingRequestsCard pendingData={dashboardData.pendingRequests} loading={loading} />
+                </div>
+
+                {/* Recent Activity - Full Width */}
+                <EmployeeActivityCard activities={dashboardData.recentActivity} loading={loading} />
+
+                {/* Quick Actions */}
                 <div className="flex flex-col w-full bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5 gap-3">
                     <h3 className="text-lg font-medium">Quick Actions</h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
