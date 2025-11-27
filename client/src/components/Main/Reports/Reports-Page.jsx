@@ -478,7 +478,7 @@ export default function ReportsPage({ pageLayout, currentUser }) {
                                                 <th className="text-left p-2 text-sm">Position</th>
                                                 <th className="text-right p-2 text-sm">Hours</th>
                                                 <th className="text-right p-2 text-sm">Overtime</th>
-                                                <th className="text-right p-2 text-sm">Basic Salary</th>
+                                                <th className="text-right p-2 text-sm">Hourly Rate</th>
                                                 <th className="text-right p-2 text-sm">OT Amount</th>
                                                 <th className="text-right p-2 text-sm">Deductions</th>
                                                 <th className="text-right p-2 text-sm">Net Pay</th>
@@ -491,7 +491,7 @@ export default function ReportsPage({ pageLayout, currentUser }) {
                                                     <td className="p-2 text-sm">{detail.department || detail.position || 'N/A'}</td>
                                                     <td className="p-2 text-sm text-right font-medium">{parseFloat(detail.hours_worked || 0).toFixed(1)}h</td>
                                                     <td className="p-2 text-sm text-right">{parseFloat(detail.overtime_hours || 0).toFixed(1)}h</td>
-                                                    <td className="p-2 text-sm text-right">₱{parseFloat(detail.basic_salary).toLocaleString()}</td>
+                                                    <td className="p-2 text-sm text-right">₱{parseFloat(detail.hourly_rate).toLocaleString()}</td>
                                                     <td className="p-2 text-sm text-right">₱{parseFloat(detail.overtime_amount || 0).toLocaleString()}</td>
                                                     <td className="p-2 text-sm text-right">₱{parseFloat(detail.deductions).toLocaleString()}</td>
                                                     <td className="p-2 text-sm text-right font-semibold">₱{parseFloat(detail.net_pay).toLocaleString()}</td>

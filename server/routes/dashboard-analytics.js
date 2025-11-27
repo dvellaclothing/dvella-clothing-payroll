@@ -101,7 +101,7 @@ router.get("/get-monthly-payroll", async (req, res) => {
                 ), 0) as total_gross
             FROM attendance a
             INNER JOIN users u ON a.user_id = u.user_id
-            WHERE a.status = 'approved'
+            WHERE a.status = 'checked_out'
                 AND EXTRACT(MONTH FROM a.date) = EXTRACT(MONTH FROM CURRENT_DATE)
                 AND EXTRACT(YEAR FROM a.date) = EXTRACT(YEAR FROM CURRENT_DATE)
         `)
@@ -117,7 +117,7 @@ router.get("/get-monthly-payroll", async (req, res) => {
                 ), 0) as total_gross
             FROM attendance a
             INNER JOIN users u ON a.user_id = u.user_id
-            WHERE a.status = 'approved'
+            WHERE a.status = 'checked_out'
                 AND EXTRACT(MONTH FROM a.date) = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 month')
                 AND EXTRACT(YEAR FROM a.date) = EXTRACT(YEAR FROM CURRENT_DATE - INTERVAL '1 month')
         `)
@@ -232,7 +232,7 @@ router.get("/get-upcoming-payroll", async (req, res) => {
             INNER JOIN attendance a ON u.user_id = a.user_id
             WHERE u.status = 'active'
                 AND u.role IN ('employee', 'manager')
-                AND a.status = 'approved'
+                AND a.status = 'checked_out'
                 AND a.date BETWEEN $1 AND $2
         `, [period.start_date, period.end_date])
         
@@ -247,7 +247,7 @@ router.get("/get-upcoming-payroll", async (req, res) => {
                 ), 0) * 0.85 as estimated_net
             FROM attendance a
             INNER JOIN users u ON a.user_id = u.user_id
-            WHERE a.status = 'approved'
+            WHERE a.status = 'checked_out'
                 AND a.date BETWEEN $1 AND $2
         `, [period.start_date, period.end_date])
         
@@ -270,10 +270,10 @@ router.get("/employee-attendance/:user_id", async (req, res) => {
         
         const currentMonth = await pool.query(`
             SELECT 
-                COUNT(DISTINCT CASE WHEN status = 'approved' THEN date END) as present_days,
+                COUNT(DISTINCT CASE WHEN status = 'checked_out' THEN date END) as present_days,
                 COUNT(DISTINCT CASE WHEN status = 'pending' THEN date END) as pending_days,
-                COALESCE(SUM(CASE WHEN status = 'approved' THEN total_hours ELSE 0 END), 0) as total_hours,
-                COALESCE(AVG(CASE WHEN status = 'approved' THEN total_hours END), 0) as avg_hours_per_day
+                COALESCE(SUM(CASE WHEN status = 'checked_out' THEN total_hours ELSE 0 END), 0) as total_hours,
+                COALESCE(AVG(CASE WHEN status = 'checked_out' THEN total_hours END), 0) as avg_hours_per_day
             FROM attendance
             WHERE user_id = $1
                 AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE)
@@ -282,8 +282,8 @@ router.get("/employee-attendance/:user_id", async (req, res) => {
         
         const lastMonth = await pool.query(`
             SELECT 
-                COUNT(DISTINCT CASE WHEN status = 'approved' THEN date END) as present_days,
-                COALESCE(SUM(CASE WHEN status = 'approved' THEN total_hours ELSE 0 END), 0) as total_hours
+                COUNT(DISTINCT CASE WHEN status = 'checked_out' THEN date END) as present_days,
+                COALESCE(SUM(CASE WHEN status = 'checked_out' THEN total_hours ELSE 0 END), 0) as total_hours
             FROM attendance
             WHERE user_id = $1
                 AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 month')
@@ -397,9 +397,9 @@ router.get("/employee-next-payroll/:user_id", async (req, res) => {
         // Calculate employee's expected pay for this period
         const hoursWorked = await pool.query(`
             SELECT 
-                COALESCE(SUM(CASE WHEN status = 'approved' THEN total_hours ELSE 0 END), 0) as total_hours,
+                COALESCE(SUM(CASE WHEN status = 'checked_out' THEN total_hours ELSE 0 END), 0) as total_hours,
                 COALESCE(SUM(CASE 
-                    WHEN status = 'approved' AND total_hours > 8 
+                    WHEN status = 'checked_out' AND total_hours > 8 
                     THEN total_hours - 8 
                     ELSE 0 
                 END), 0) as overtime_hours

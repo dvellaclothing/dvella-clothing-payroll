@@ -5,7 +5,6 @@ import Header from "../../Main/Header"
 const attendanceIcon = "/images/performance.png"
 const calendarIcon = "/images/dashboard.png"
 const clockIcon = "/images/kpi.png"
-const addIcon = "/images/add-employee.png"
 
 export default function EmployeeAttendance({ pageLayout, currentUser }) {
     const [attendanceData, setAttendanceData] = useState(null)
@@ -13,25 +12,47 @@ export default function EmployeeAttendance({ pageLayout, currentUser }) {
     const [loading, setLoading] = useState(true)
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-    const [showRequestModal, setShowRequestModal] = useState(false)
-    const [submitting, setSubmitting] = useState(false)
     
-    // Request form state
-    const [requestDate, setRequestDate] = useState(new Date().toISOString().split('T')[0])
-    const [checkInTime, setCheckInTime] = useState('')
-    const [checkOutTime, setCheckOutTime] = useState('')
-    const [notes, setNotes] = useState('')
-    const [responseMessage, setResponseMessage] = useState('')
-    const [responseStatus, setResponseStatus] = useState(null)
+    // Real-time attendance state
+    const [todayAttendance, setTodayAttendance] = useState(null)
+    const [isCheckedIn, setIsCheckedIn] = useState(false)
+    const [checkInTime, setCheckInTime] = useState(null)
+    const [currentTime, setCurrentTime] = useState(new Date())
+    const [processing, setProcessing] = useState(false)
+
+    // Update current time every second
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentTime(new Date())
+        }, 1000)
+        return () => clearInterval(timer)
+    }, [])
 
     useEffect(() => {
         fetchAttendance()
         fetchAttendanceRecords()
+        checkTodayAttendance()
     }, [selectedMonth, selectedYear])
+
+    const checkTodayAttendance = async () => {
+        try {
+            const today = new Date().toISOString().split('T')[0]
+            const response = await fetch(`${API_URL}/api/attendance/today/${currentUser?.user_id}?date=${today}`)
+            const data = await response.json()
+            
+            if (data.attendance) {
+                setTodayAttendance(data.attendance)
+                setIsCheckedIn(data.attendance.status === 'checked_in')
+                setCheckInTime(data.attendance.check_in_time)
+            }
+        } catch (error) {
+            console.error('Error checking today attendance:', error)
+        }
+    }
 
     const fetchAttendance = async () => {
         try {
-            const response = await fetch(`${API_URL}/api/attendance/summary/${currentUser.user_id}`)
+            const response = await fetch(`${API_URL}/api/attendance/summary/${currentUser?.user_id || 1}`)
             const data = await response.json()
             setAttendanceData(data)
         } catch (error) {
@@ -43,7 +64,7 @@ export default function EmployeeAttendance({ pageLayout, currentUser }) {
 
     const fetchAttendanceRecords = async () => {
         try {
-            const response = await fetch(`${API_URL}/api/attendance/records/${currentUser.user_id}?month=${selectedMonth}&year=${selectedYear}`)
+            const response = await fetch(`${API_URL}/api/attendance/records/${currentUser?.user_id || 1}?month=${selectedMonth}&year=${selectedYear}`)
             const data = await response.json()
             if (Array.isArray(data.records)) {
                 setAttendanceRecords(data.records)
@@ -53,81 +74,97 @@ export default function EmployeeAttendance({ pageLayout, currentUser }) {
         }
     }
 
-    const handleSubmitRequest = async (e) => {
-        e.preventDefault()
-        setSubmitting(true)
-        setResponseMessage('')
-        
+    const handleCheckIn = async () => {
+        setProcessing(true)
         try {
-            // Validate times
-            if (!checkInTime || !checkOutTime) {
-                setResponseMessage('Please provide both check-in and check-out times')
-                setResponseStatus(false)
-                return
-            }
+            const now = new Date()
+            const timeString = now.toTimeString().split(' ')[0] // HH:MM:SS
             
-            // Calculate total hours
-            const checkIn = new Date(`2000-01-01T${checkInTime}`)
-            const checkOut = new Date(`2000-01-01T${checkOutTime}`)
-            const totalHours = (checkOut - checkIn) / (1000 * 60 * 60)
-            
-            if (totalHours <= 0) {
-                setResponseMessage('Check-out time must be after check-in time')
-                setResponseStatus(false)
-                return
-            }
-            
-            const response = await fetch(`${API_URL}/api/attendance/submit`, {
+            const response = await fetch(`${API_URL}/api/attendance/check-in`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    user_id: currentUser.user_id,
-                    date: requestDate,
-                    check_in_time: checkInTime,
-                    check_out_time: checkOutTime,
-                    total_hours: totalHours.toFixed(2),
-                    notes: notes
+                    user_id: currentUser?.user_id || 1,
+                    date: now.toISOString().split('T')[0],
+                    check_in_time: timeString
                 })
             })
             
             const data = await response.json()
             
             if (response.ok) {
-                setResponseMessage('Attendance request submitted successfully!')
-                setResponseStatus(true)
-                
-                // Reset form
-                setCheckInTime('')
-                setCheckOutTime('')
-                setNotes('')
-                
-                // Refresh data
+                setTodayAttendance(data.attendance)
+                setIsCheckedIn(true)
+                setCheckInTime(timeString)
+                alert('✅ Checked in successfully!')
                 await fetchAttendance()
                 await fetchAttendanceRecords()
-                
-                // Close modal after delay
-                setTimeout(() => {
-                    setShowRequestModal(false)
-                    setResponseMessage('')
-                }, 2000)
             } else {
-                setResponseMessage(data.message || 'Failed to submit request')
-                setResponseStatus(false)
+                alert(data.message || 'Failed to check in')
             }
         } catch (error) {
-            console.error('Error submitting request:', error)
-            setResponseMessage('Error submitting request. Please try again.')
-            setResponseStatus(false)
+            console.error('Error checking in:', error)
+            alert('Error checking in. Please try again.')
         } finally {
-            setSubmitting(false)
+            setProcessing(false)
         }
+    }
+
+    const handleCheckOut = async () => {
+        setProcessing(true)
+        try {
+            const now = new Date()
+            const timeString = now.toTimeString().split(' ')[0]
+            
+            const response = await fetch(`${API_URL}/api/attendance/check-out`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    attendance_id: todayAttendance.attendance_id,
+                    check_out_time: timeString
+                })
+            })
+            
+            const data = await response.json()
+            
+            if (response.ok) {
+                setTodayAttendance(data.attendance)
+                setIsCheckedIn(false)
+                setCheckInTime(null)
+                alert('✅ Checked out successfully!')
+                await fetchAttendance()
+                await fetchAttendanceRecords()
+            } else {
+                alert(data.message || 'Failed to check out')
+            }
+        } catch (error) {
+            console.error('Error checking out:', error)
+            alert('Error checking out. Please try again.')
+        } finally {
+            setProcessing(false)
+        }
+    }
+
+    const calculateWorkingHours = () => {
+        if (!isCheckedIn || !checkInTime) return '0:00:00'
+        
+        const checkIn = new Date(`2000-01-01T${checkInTime}`)
+        const now = currentTime
+        const diff = now - checkIn
+        
+        const hours = Math.floor(diff / (1000 * 60 * 60))
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000)
+        
+        return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
     }
 
     const getStatusBadge = (status) => {
         const badges = {
             pending: 'bg-yellow-100 text-yellow-800',
             approved: 'bg-green-100 text-green-800',
-            rejected: 'bg-red-100 text-red-800'
+            rejected: 'bg-red-100 text-red-800',
+            checked_in: 'bg-blue-100 text-blue-800'
         }
         return badges[status] || 'bg-gray-100 text-gray-800'
     }
@@ -141,273 +178,218 @@ export default function EmployeeAttendance({ pageLayout, currentUser }) {
     }
 
     return (
-        <>
-            <div className={`${pageLayout ? 'col-span-5' : 'col-span-17 xl:col-start-2'} col-start-2 flex flex-col w-full min-h-full`}>
-                <Header pageLayout={pageLayout} pageTitle="My Attendance" pageDescription="Track and submit your attendance records" currentUser={currentUser} />
-                
-                <div className="flex flex-col items-center justify-start h-9/10 w-full p-5 gap-5 overflow-y-scroll">
-                    {/* Action Button */}
-                    <div className="flex flex-row items-center justify-between w-full">
-                        <div className="flex flex-col">
-                            <h2 className="text-md font-medium">Attendance Overview</h2>
-                            <p className="text-sm text-[rgba(0,0,0,0.6)]">Monitor your attendance and submit new requests</p>
-                        </div>
-                        <button
-                            onClick={() => setShowRequestModal(true)}
-                            className="flex flex-row items-center gap-2 bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition duration-200"
-                        >
-                            <span className="text-xl">+</span>
-                            Submit Attendance
-                        </button>
-                    </div>
-
-                    {/* Summary Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-5 w-full">
-                        <div className="flex flex-col items-start justify-between h-32 w-full bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
-                            <p className="text-sm text-[rgba(0,0,0,0.6)]">This Month</p>
-                            {loading ? (
-                                <p className="text-sm">Loading...</p>
-                            ) : (
-                                <>
-                                    <p className="text-3xl font-bold">{attendanceData?.currentMonth?.approved_days || 0}</p>
-                                    <p className="text-sm text-[rgba(0,0,0,0.6)]">
-                                        days approved
-                                    </p>
-                                </>
-                            )}
-                        </div>
-
-                        <div className="flex flex-col items-start justify-between h-32 w-full bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
-                            <p className="text-sm text-[rgba(0,0,0,0.6)]">Total Hours</p>
-                            {loading ? (
-                                <p className="text-sm">Loading...</p>
-                            ) : (
-                                <>
-                                    <p className="text-3xl font-bold">{parseFloat(attendanceData?.currentMonth?.total_hours || 0).toFixed(1)}</p>
-                                    <p className="text-sm text-[rgba(0,0,0,0.6)]">
-                                        hours worked
-                                    </p>
-                                </>
-                            )}
-                        </div>
-
-                        <div className="flex flex-col items-start justify-between h-32 w-full bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
-                            <p className="text-sm text-[rgba(0,0,0,0.6)]">Pending Requests</p>
-                            {loading ? (
-                                <p className="text-sm">Loading...</p>
-                            ) : (
-                                <>
-                                    <p className="text-3xl font-bold">{attendanceData?.pending_count || 0}</p>
-                                    <p className="text-sm text-yellow-600">
-                                        awaiting approval
-                                    </p>
-                                </>
-                            )}
-                        </div>
-
-                        <div className="flex flex-col items-start justify-between h-32 w-full bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
-                            <p className="text-sm text-[rgba(0,0,0,0.6)]">Last Month</p>
-                            {loading ? (
-                                <p className="text-sm">Loading...</p>
-                            ) : (
-                                <>
-                                    <p className="text-3xl font-bold">{attendanceData?.lastMonth?.approved_days || 0}</p>
-                                    <p className="text-sm text-[rgba(0,0,0,0.6)]">
-                                        days approved
-                                    </p>
-                                </>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Attendance Records */}
-                    <div className="flex flex-col w-full bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5 gap-4">
-                        <div className="flex flex-row items-center justify-between">
-                            <div className="flex flex-row items-center gap-3">
-                                <img src={calendarIcon} className="h-6 w-auto" alt="Calendar" />
-                                <h2 className="text-lg font-medium">Attendance Records</h2>
-                            </div>
-                            <div className="flex flex-row gap-2">
-                                <select
-                                    value={selectedMonth}
-                                    onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                                    className="border border-gray-300 rounded px-3 py-1 text-sm focus:outline-none focus:border-black bg-white cursor-pointer"
-                                >
-                                    {Array.from({ length: 12 }, (_, i) => (
-                                        <option key={i + 1} value={i + 1}>
-                                            {new Date(2000, i).toLocaleString('default', { month: 'long' })}
-                                        </option>
-                                    ))}
-                                </select>
-                                <select
-                                    value={selectedYear}
-                                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                                    className="border border-gray-300 rounded px-3 py-1 text-sm focus:outline-none focus:border-black bg-white cursor-pointer"
-                                >
-                                    {Array.from({ length: 5 }, (_, i) => (
-                                        <option key={i} value={new Date().getFullYear() - i}>
-                                            {new Date().getFullYear() - i}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-
-                        <div className="overflow-x-auto">
-                            <div className="min-w-[800px]">
-                                <div className="grid grid-cols-7 gap-4 w-full items-center h-10 px-2 bg-gray-50 rounded-lg">
-                                    <p className="col-span-1 font-medium text-sm">Date</p>
-                                    <p className="col-span-1 font-medium text-sm">Check In</p>
-                                    <p className="col-span-1 font-medium text-sm">Check Out</p>
-                                    <p className="col-span-1 font-medium text-sm">Hours</p>
-                                    <p className="col-span-1 font-medium text-sm">Status</p>
-                                    <p className="col-span-2 font-medium text-sm">Notes</p>
+        <div className={`${pageLayout ? 'col-span-5' : 'col-span-17 xl:col-start-2'} col-start-2 flex flex-col w-full min-h-full`}>
+            <Header pageLayout={pageLayout} pageTitle="Attendance Management" pageDescription="Review and manage employee attendance requests" currentUser={currentUser} />
+            
+            <div className="flex flex-col items-center justify-start w-full p-5 gap-5 overflow-y-auto">
+                {/* Check In/Out Card */}
+                <div className="w-full bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl shadow-2xl p-8 text-white">
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="bg-blue-500 p-3 rounded-full">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
                                 </div>
-                                
-                                <div className="flex flex-col gap-1 mt-2">
-                                    {attendanceRecords.length > 0 ? (
-                                        attendanceRecords.map((record, index) => (
-                                            <div key={index} className="grid grid-cols-7 gap-4 w-full items-center min-h-12 px-2 border-b border-[rgba(0,0,0,0.05)] hover:bg-gray-50 rounded-lg">
-                                                <p className="col-span-1 text-sm">
-                                                    {new Date(record.date).toLocaleDateString('en-US', { 
-                                                        month: 'short', 
-                                                        day: 'numeric',
-                                                        year: 'numeric'
-                                                    })}
-                                                </p>
-                                                <p className="col-span-1 text-sm">{formatTime(record.check_in_time)}</p>
-                                                <p className="col-span-1 text-sm">{formatTime(record.check_out_time)}</p>
-                                                <p className="col-span-1 text-sm font-medium">
-                                                    {record.total_hours ? parseFloat(record.total_hours).toFixed(1) + ' hrs' : '-'}
-                                                </p>
-                                                <div className="col-span-1">
-                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(record.status)}`}>
-                                                        {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
-                                                    </span>
-                                                </div>
-                                                <p className="col-span-2 text-sm text-[rgba(0,0,0,0.6)] truncate">
-                                                    {record.notes || '-'}
-                                                </p>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <div className="text-center py-8 text-gray-400">
-                                            No attendance records found for this period
+                                <div>
+                                    <h2 className="text-2xl font-bold">
+                                        {currentTime.toLocaleTimeString('en-US', { 
+                                            hour: '2-digit', 
+                                            minute: '2-digit',
+                                            second: '2-digit'
+                                        })}
+                                    </h2>
+                                    <p className="text-blue-200 text-sm">
+                                        {currentTime.toLocaleDateString('en-US', { 
+                                            weekday: 'long',
+                                            year: 'numeric', 
+                                            month: 'long', 
+                                            day: 'numeric' 
+                                        })}
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            {isCheckedIn && (
+                                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 mb-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-blue-200 text-sm">Working Hours</span>
+                                        <span className="bg-green-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
+                                            Active
+                                        </span>
+                                    </div>
+                                    <p className="text-3xl font-bold font-mono">{calculateWorkingHours()}</p>
+                                    <p className="text-sm text-blue-200 mt-2">
+                                        Checked in at {formatTime(checkInTime)}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="flex flex-col gap-3">
+                            {!isCheckedIn ? (
+                                <button
+                                    onClick={handleCheckIn}
+                                    disabled={processing}
+                                    className="px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    {processing ? 'Processing...' : 'Check In'}
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleCheckOut}
+                                    disabled={processing}
+                                    className="px-8 py-4 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                    </svg>
+                                    {processing ? 'Processing...' : 'Check Out'}
+                                </button>
+                            )}
+                            
+                            {isCheckedIn && (
+                                <p className="text-center text-xs text-blue-200">
+                                    Don't forget to check out when you're done!
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-5 w-full">
+                    <div className="flex flex-col items-start justify-between h-32 w-full bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+                        <p className="text-sm text-gray-600">This Month</p>
+                        {loading ? (
+                            <p className="text-sm">Loading...</p>
+                        ) : (
+                            <>
+                                <p className="text-3xl font-bold text-gray-900">{attendanceData?.currentMonth?.approved_days || 0}</p>
+                                <p className="text-sm text-gray-600">days approved</p>
+                            </>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col items-start justify-between h-32 w-full bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+                        <p className="text-sm text-gray-600">Total Hours</p>
+                        {loading ? (
+                            <p className="text-sm">Loading...</p>
+                        ) : (
+                            <>
+                                <p className="text-3xl font-bold text-gray-900">{parseFloat(attendanceData?.currentMonth?.total_hours || 0).toFixed(1)}</p>
+                                <p className="text-sm text-gray-600">hours worked</p>
+                            </>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col items-start justify-between h-32 w-full bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+                        <p className="text-sm text-gray-600">Pending Requests</p>
+                        {loading ? (
+                            <p className="text-sm">Loading...</p>
+                        ) : (
+                            <>
+                                <p className="text-3xl font-bold text-gray-900">{attendanceData?.pending_count || 0}</p>
+                                <p className="text-sm text-yellow-600">awaiting approval</p>
+                            </>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col items-start justify-between h-32 w-full bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+                        <p className="text-sm text-gray-600">Last Month</p>
+                        {loading ? (
+                            <p className="text-sm">Loading...</p>
+                        ) : (
+                            <>
+                                <p className="text-3xl font-bold text-gray-900">{attendanceData?.lastMonth?.approved_days || 0}</p>
+                                <p className="text-sm text-gray-600">days approved</p>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                {/* Attendance Records */}
+                <div className="flex flex-col w-full bg-white rounded-2xl border border-gray-200 p-5 gap-4 shadow-sm">
+                    <div className="flex flex-row items-center justify-between">
+                        <div className="flex flex-row items-center gap-3">
+                            <div className="bg-blue-100 p-2 rounded-lg">
+                                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                            </div>
+                            <h2 className="text-lg font-semibold">Attendance Records</h2>
+                        </div>
+                        <div className="flex flex-row gap-2">
+                            <select
+                                value={selectedMonth}
+                                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 bg-white cursor-pointer"
+                            >
+                                {Array.from({ length: 12 }, (_, i) => (
+                                    <option key={i + 1} value={i + 1}>
+                                        {new Date(2000, i).toLocaleString('default', { month: 'long' })}
+                                    </option>
+                                ))}
+                            </select>
+                            <select
+                                value={selectedYear}
+                                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 bg-white cursor-pointer"
+                            >
+                                {Array.from({ length: 5 }, (_, i) => (
+                                    <option key={i} value={new Date().getFullYear() - i}>
+                                        {new Date().getFullYear() - i}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <div className="min-w-[800px]">
+                            <div className="grid grid-cols-6 gap-4 w-full items-center h-10 px-2 bg-gray-50 rounded-lg">
+                                <p className="col-span-1 font-medium text-sm">Date</p>
+                                <p className="col-span-1 font-medium text-sm">Check In</p>
+                                <p className="col-span-1 font-medium text-sm">Check Out</p>
+                                <p className="col-span-1 font-medium text-sm">Hours</p>
+                                <p className="col-span-2 font-medium text-sm">Notes</p>
+                            </div>
+                            
+                            <div className="flex flex-col gap-1 mt-2">
+                                {attendanceRecords.length > 0 ? (
+                                    attendanceRecords.map((record, index) => (
+                                        <div key={index} className="grid grid-cols-6 gap-4 w-full items-center min-h-12 px-2 border-b border-gray-100 hover:bg-gray-50 rounded-lg transition-colors">
+                                            <p className="col-span-1 text-sm">
+                                                {new Date(record.date).toLocaleDateString('en-US', { 
+                                                    month: 'short', 
+                                                    day: 'numeric',
+                                                    year: 'numeric'
+                                                })}
+                                            </p>
+                                            <p className="col-span-1 text-sm">{formatTime(record.check_in_time)}</p>
+                                            <p className="col-span-1 text-sm">{formatTime(record.check_out_time)}</p>
+                                            <p className="col-span-1 text-sm font-medium">
+                                                {record.total_hours ? parseFloat(record.total_hours).toFixed(1) + ' hrs' : '-'}
+                                            </p>
+                                            <p className="col-span-2 text-sm text-gray-600 truncate">
+                                                {record.notes || '-'}
+                                            </p>
                                         </div>
-                                    )}
-                                </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-8 text-gray-400">
+                                        No attendance records found for this period
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-
-            {/* Submit Attendance Modal */}
-            {showRequestModal && (
-                <div 
-                    className="fixed inset-0 bg-[rgba(0,0,0,0.3)] flex items-center justify-center z-50"
-                    onClick={() => setShowRequestModal(false)}
-                >
-                    <div 
-                        className="bg-white rounded-2xl p-6 max-w-md w-full mx-4"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="flex justify-between items-center mb-6">
-                            <div className="flex items-center gap-3">
-                                <img src={clockIcon} className="h-6 w-auto" alt="Clock" />
-                                <h3 className="text-xl font-semibold">Submit Attendance</h3>
-                            </div>
-                            <button 
-                                onClick={() => setShowRequestModal(false)}
-                                className="text-3xl hover:text-gray-600 leading-none"
-                            >
-                                ×
-                            </button>
-                        </div>
-                        
-                        {responseMessage && (
-                            <div className={`mb-4 p-3 rounded-lg text-sm ${
-                                responseStatus 
-                                    ? 'bg-green-100 text-green-700 border border-green-200' 
-                                    : 'bg-red-100 text-red-700 border border-red-200'
-                            }`}>
-                                {responseMessage}
-                            </div>
-                        )}
-                        
-                        <form onSubmit={handleSubmitRequest} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Date *</label>
-                                <input
-                                    type="date"
-                                    value={requestDate}
-                                    onChange={(e) => setRequestDate(e.target.value)}
-                                    max={new Date().toISOString().split('T')[0]}
-                                    required
-                                    className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:border-black"
-                                />
-                            </div>
-                            
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Check In *</label>
-                                    <input
-                                        type="time"
-                                        value={checkInTime}
-                                        onChange={(e) => setCheckInTime(e.target.value)}
-                                        required
-                                        className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:border-black"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Check Out *</label>
-                                    <input
-                                        type="time"
-                                        value={checkOutTime}
-                                        onChange={(e) => setCheckOutTime(e.target.value)}
-                                        required
-                                        className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:border-black"
-                                    />
-                                </div>
-                            </div>
-                            
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Notes (Optional)</label>
-                                <textarea
-                                    value={notes}
-                                    onChange={(e) => setNotes(e.target.value)}
-                                    rows={3}
-                                    placeholder="Add any additional notes..."
-                                    className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:border-black resize-none"
-                                />
-                            </div>
-                            
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                                <p className="text-xs text-blue-800">
-                                    <strong>Note:</strong> Your attendance request will be reviewed by an administrator. You'll receive a notification once it's approved or rejected.
-                                </p>
-                            </div>
-                            
-                            <div className="flex gap-3 pt-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowRequestModal(false)}
-                                    className="flex-1 px-5 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={submitting}
-                                    className="flex-1 px-5 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {submitting ? 'Submitting...' : 'Submit Request'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-        </>
+        </div>
     )
 }

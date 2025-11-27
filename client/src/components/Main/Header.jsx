@@ -5,7 +5,7 @@ import { API_URL } from "../../config"
 const notificationIcon = "/images/notification.png"
 
 export default function Header({ pageLayout, pageTitle, pageDescription, currentUser }) {
-    const navigate = useNavigate()  // Add this
+    const navigate = useNavigate()
     const [notifications, setNotifications] = useState([])
     const [unreadCount, setUnreadCount] = useState(0)
     const [showNotifications, setShowNotifications] = useState(false)
@@ -101,21 +101,17 @@ export default function Header({ pageLayout, pageTitle, pageDescription, current
         }
     }
 
-    // Add this function to handle notification click with navigation
     const handleNotificationItemClick = (notification) => {
-        // Mark as read if unread
         if (!notification.is_read) {
             markAsRead(notification.notification_id)
         }
-        
-        // Navigate to link_url if it exists
+
         if (notification.link_url) {
             setShowNotifications(false)
             navigate(`/employee${notification.link_url}`)
         }
     }
 
-    // Add this function to navigate to notifications page
     const goToNotificationsPage = () => {
         setShowNotifications(false)
         const notificationsPath = currentUser?.role === 'admin' 
@@ -171,7 +167,7 @@ export default function Header({ pageLayout, pageTitle, pageDescription, current
     }
 
     return (
-        <div className="flex flex-row items-center justify-between h-20 w-full border-b border-gray-200 px-5">
+        <div className="flex flex-row items-center justify-between h-1/10 w-full border-b border-gray-200 px-5">
             <div className="flex flex-col items-start justify-center">
                 <h2 className="font-medium text-lg">{pageTitle}</h2>
                 <p className="text-sm text-gray-500">{pageDescription}</p>

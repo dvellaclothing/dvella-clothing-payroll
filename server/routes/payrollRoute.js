@@ -142,12 +142,12 @@ router.get('/payroll/:period_id', async (req, res) => {
                 u.salary as basic_salary,
                 u.hourly_rate,
                 COALESCE(SUM(CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out' 
                     THEN a.total_hours 
                     ELSE 0 
                 END), 0) as hours_worked,
                 COALESCE(SUM(CASE 
-                    WHEN a.status = 'approved' AND a.total_hours > 8
+                    WHEN a.status = 'checked_out' AND a.total_hours > 8
                     THEN a.total_hours - 8
                     ELSE 0 
                 END), 0) as overtime_hours
@@ -256,12 +256,12 @@ router.post('/payroll/generate-payslip/:user_id/:period_id', async (req, res) =>
                 u.salary as basic_salary,
                 u.hourly_rate,
                 COALESCE(SUM(CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out' 
                     THEN a.total_hours 
                     ELSE 0 
                 END), 0) as hours_worked,
                 COALESCE(SUM(CASE 
-                    WHEN a.status = 'approved' AND a.total_hours > 8
+                    WHEN a.status = 'checked_out' AND a.total_hours > 8
                     THEN a.total_hours - 8
                     ELSE 0 
                 END), 0) as overtime_hours

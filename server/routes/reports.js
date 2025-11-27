@@ -52,7 +52,7 @@ router.get("/payroll-reports", async (req, res) => {
                     COALESCE(SUM(a.total_hours), 0) as total_hours,
                     COALESCE(AVG(a.total_hours), 0) as avg_hours
                 FROM attendance a
-                WHERE a.status = 'approved'
+                WHERE a.status = 'checked_out'
                     AND a.date BETWEEN $1 AND $2
             `
             const stats = await pool.query(statsQuery, [period.start_date, period.end_date])
@@ -108,11 +108,11 @@ router.get("/payroll-detail/:periodId", async (req, res) => {
                 0 as deductions,
                 0 as gross_pay,
                 0 as net_pay,
-                'approved' as status,
+                'checked_out' as status,
                 NOW() as created_at
             FROM users u
             LEFT JOIN attendance a ON u.user_id = a.user_id
-                AND a.status = 'approved'
+                AND a.status = 'checked_out'
                 AND a.date BETWEEN $1 AND $2
             WHERE u.role IN ('employee', 'manager', 'admin')
                 AND u.status = 'active'
@@ -154,7 +154,7 @@ router.get("/payroll-trend", async (req, res) => {
                     COALESCE(SUM(total_hours), 0) as total_hours,
                     COALESCE(AVG(total_hours), 0) as avg_hours
                 FROM attendance
-                WHERE status = 'approved'
+                WHERE status = 'checked_out'
                     AND date BETWEEN $1 AND $2
             `
             const attendance = await pool.query(attendanceQuery, [row.start_date, row.end_date])
@@ -188,12 +188,12 @@ router.get("/department-breakdown", async (req, res) => {
                 COALESCE(SUM(a.total_hours), 0) as total_hours_this_month,
                 COALESCE(AVG(a.total_hours), 0) as avg_hours_per_attendance,
                 COUNT(DISTINCT CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out' 
                     THEN a.date 
                 END) as attendance_days
             FROM users u
             LEFT JOIN attendance a ON u.user_id = a.user_id
-                AND a.status = 'approved'
+                AND a.status = 'checked_out'
                 AND EXTRACT(MONTH FROM a.date) = EXTRACT(MONTH FROM CURRENT_DATE)
                 AND EXTRACT(YEAR FROM a.date) = EXTRACT(YEAR FROM CURRENT_DATE)
             WHERE u.status = 'active'
@@ -215,7 +215,7 @@ router.get("/department-breakdown", async (req, res) => {
 router.get("/statistics", async (req, res) => {
     try {
         const recordsResult = await pool.query(`
-            SELECT COUNT(*) as count FROM attendance WHERE status = 'approved'
+            SELECT COUNT(*) as count FROM attendance WHERE status = 'checked_out'
         `)
         
         const activeEmployeesResult = await pool.query(`
@@ -228,7 +228,7 @@ router.get("/statistics", async (req, res) => {
                 COALESCE(SUM(total_hours), 0) as total_hours,
                 COUNT(DISTINCT user_id) as active_employees
             FROM attendance
-            WHERE status = 'approved'
+            WHERE status = 'checked_out'
                 AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE)
                 AND EXTRACT(YEAR FROM date) = EXTRACT(YEAR FROM CURRENT_DATE)
         `)
@@ -280,16 +280,16 @@ router.get("/employee-attendance-report", async (req, res) => {
                 u.last_name,
                 u.position,
                 COUNT(DISTINCT CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out' 
                     THEN a.date 
                 END) as days_present,
                 COALESCE(SUM(CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out' 
                     THEN a.total_hours 
                     ELSE 0 
                 END), 0) as total_hours,
                 COALESCE(AVG(CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out' 
                     THEN a.total_hours 
                 END), 0) as avg_hours_per_day
             FROM users u

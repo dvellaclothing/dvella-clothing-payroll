@@ -37,11 +37,6 @@ const sendBrevoEmail = async (to, subject, htmlContent) => {
     }
 }
 
-// ===========================================
-// IMPORTANT: Static routes MUST come before parameterized routes
-// ===========================================
-
-// Get all attendance requests grouped by status
 router.get("/requests", async (req, res) => {
     try {
         console.log('Fetching attendance requests...')
@@ -89,7 +84,7 @@ router.get("/requests", async (req, res) => {
                 u.position
             FROM attendance a
             INNER JOIN users u ON a.user_id = u.user_id
-            WHERE a.status = 'approved'
+            WHERE a.status = 'checked_in'
             ORDER BY a.date DESC, a.created_at DESC
             LIMIT 50
         `)
@@ -111,7 +106,7 @@ router.get("/requests", async (req, res) => {
                 u.position
             FROM attendance a
             INNER JOIN users u ON a.user_id = u.user_id
-            WHERE a.status = 'rejected'
+            WHERE a.status = 'checked_out'
             ORDER BY a.date DESC, a.created_at DESC
             LIMIT 50
         `)
@@ -143,7 +138,7 @@ router.get("/stats", async (req, res) => {
         const approvedCount = await pool.query(`
             SELECT COUNT(*) as count
             FROM attendance
-            WHERE status = 'approved'
+            WHERE status = 'checked_out'
             AND date >= CURRENT_DATE - INTERVAL '30 days'
         `)
         
@@ -185,8 +180,8 @@ router.get("/debug/check", async (req, res) => {
         const recordCount = await pool.query(`
             SELECT COUNT(*) as total,
                    COUNT(*) FILTER (WHERE status = 'pending') as pending,
-                   COUNT(*) FILTER (WHERE status = 'approved') as approved,
-                   COUNT(*) FILTER (WHERE status = 'rejected') as rejected
+                   COUNT(*) FILTER (WHERE status = 'checked_in') as checked_in,
+                   COUNT(*) FILTER (WHERE status = 'checked_out') as checked_out
             FROM attendance;
         `)
         
@@ -231,7 +226,7 @@ router.post("/approve", async (req, res) => {
         
         const updateResult = await pool.query(`
             UPDATE attendance 
-            SET status = 'approved'
+            SET status = 'checked_out'
             WHERE attendance_id = $1
             RETURNING *
         `, [attendance_id])
@@ -546,8 +541,8 @@ router.get("/summary/:user_id", async (req, res) => {
         
         const currentMonth = await pool.query(`
             SELECT 
-                COUNT(*) FILTER (WHERE status = 'approved') as approved_days,
-                SUM(total_hours) FILTER (WHERE status = 'approved') as total_hours
+                COUNT(*) FILTER (WHERE status = 'checked_out') as approved_days,
+                SUM(total_hours) FILTER (WHERE status = 'checked_out') as total_hours
             FROM attendance
             WHERE user_id = $1
             AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE)
@@ -556,8 +551,8 @@ router.get("/summary/:user_id", async (req, res) => {
         
         const lastMonth = await pool.query(`
             SELECT 
-                COUNT(*) FILTER (WHERE status = 'approved') as approved_days,
-                SUM(total_hours) FILTER (WHERE status = 'approved') as total_hours
+                COUNT(*) FILTER (WHERE status = 'checked_out') as approved_days,
+                SUM(total_hours) FILTER (WHERE status = 'checked_out') as total_hours
             FROM attendance
             WHERE user_id = $1
             AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 month')
@@ -611,6 +606,156 @@ router.get("/records/:user_id", async (req, res) => {
         `, [user_id, month, year])
         
         return res.json({ records: result.rows })
+    } catch (err) {
+        console.error(err)
+        return res.status(500).json({ error: err.message })
+    }
+})
+
+router.get("/:user_id", async (req, res) => {
+    try {
+        const { user_id } = req.params;
+
+        // THIS MONTH PRESENT
+        const presentThisMonth = await pool.query(
+            `SELECT COUNT(*) AS present_days
+             FROM attendance
+             WHERE user_id = $1
+               AND status = 'checked_out'
+               AND date_trunc('month', date) = date_trunc('month', CURRENT_DATE)`,
+            [user_id]
+        );
+
+        // LAST MONTH PRESENT
+        const presentLastMonth = await pool.query(
+            `SELECT COUNT(*) AS present_days
+             FROM attendance
+             WHERE user_id = $1
+               AND status = 'checked_out'
+               AND date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month')
+               AND date < date_trunc('month', CURRENT_DATE)`,
+            [user_id]
+        );
+
+        // THIS MONTH TOTAL HOURS
+        const totalHoursThisMonth = await pool.query(
+            `SELECT COALESCE(SUM(total_hours), 0) AS total_hours
+             FROM attendance
+             WHERE user_id = $1
+               AND status = 'checked_out'
+               AND date_trunc('month', date) = date_trunc('month', CURRENT_DATE)`,
+            [user_id]
+        );
+
+        return res.status(200).json({
+            currentMonth: {
+                present_days: Number(presentThisMonth.rows[0].present_days),
+                total_hours: Number(totalHoursThisMonth.rows[0].total_hours),
+                total_days: new Date().getDate()
+            },
+            lastMonth: {
+                present_days: Number(presentLastMonth.rows[0].present_days),
+                total_days: new Date(
+                    new Date().getFullYear(),
+                    new Date().getMonth(),
+                    0
+                ).getDate()
+            }
+        });
+
+    } catch (err) {
+        console.error("ATTENDANCE ERROR:", err);
+        return res.status(500).json({ message: "Server error fetching attendance" });
+    }
+});
+
+
+router.get("/today/:user_id", async (req, res) => {
+    try {
+        const { user_id } = req.params
+        const { date } = req.query
+        
+        const result = await pool.query(`
+            SELECT * FROM attendance
+            WHERE user_id = $1 AND date = $2
+            ORDER BY created_at DESC
+            LIMIT 1
+        `, [user_id, date])
+        
+        if (result.rows.length === 0) {
+            return res.json({ attendance: null })
+        }
+        
+        return res.json({ attendance: result.rows[0] })
+    } catch (err) {
+        console.error(err)
+        return res.status(500).json({ error: err.message })
+    }
+})
+
+// Automated Check In
+router.post("/check-in", async (req, res) => {
+    try {
+        const { user_id, date, check_in_time } = req.body
+        
+        // Check if already checked in today
+        const existing = await pool.query(`
+            SELECT * FROM attendance
+            WHERE user_id = $1 AND date = $2
+        `, [user_id, date])
+        
+        if (existing.rows.length > 0) {
+            return res.status(400).json({ 
+                message: 'You have already checked in today.' 
+            })
+        }
+        
+        const result = await pool.query(`
+            INSERT INTO attendance (user_id, date, check_in_time, status)
+            VALUES ($1, $2, $3, 'checked_in')
+            RETURNING *
+        `, [user_id, date, check_in_time])
+        
+        return res.json({ 
+            message: 'Checked in successfully',
+            attendance: result.rows[0]
+        })
+    } catch (err) {
+        console.error(err)
+        return res.status(500).json({ error: err.message })
+    }
+})
+
+router.post("/check-out", async (req, res) => {
+    try {
+        const { attendance_id, check_out_time } = req.body
+        
+        const attendanceRecord = await pool.query(`
+            SELECT check_in_time FROM attendance
+            WHERE attendance_id = $1
+        `, [attendance_id])
+        
+        if (attendanceRecord.rows.length === 0) {
+            return res.status(404).json({ message: 'Attendance record not found' })
+        }
+        
+        const checkIn = new Date(`2000-01-01T${attendanceRecord.rows[0].check_in_time}`)
+        const checkOut = new Date(`2000-01-01T${check_out_time}`)
+        const totalHours = ((checkOut - checkIn) / (1000 * 60 * 60)).toFixed(2)
+        
+        const result = await pool.query(`
+            UPDATE attendance 
+            SET check_out_time = $1, 
+                total_hours = $2,
+                status = 'checked_out'
+            WHERE attendance_id = $3
+            RETURNING *
+        `, [check_out_time, totalHours, attendance_id])
+        
+        return res.json({ 
+            message: 'Checked out successfully',
+            attendance: result.rows[0]
+        })
     } catch (err) {
         console.error(err)
         return res.status(500).json({ error: err.message })

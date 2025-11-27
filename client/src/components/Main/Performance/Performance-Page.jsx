@@ -12,7 +12,7 @@ export default function AttendancePage({ pageLayout, currentUser }) {
     const [approvedRequests, setApprovedRequests] = useState([])
     const [rejectedRequests, setRejectedRequests] = useState([])
     const [loading, setLoading] = useState(true)
-    const [activeTab, setActiveTab] = useState('pending') // pending, approved, rejected
+    const [activeTab, setActiveTab] = useState('checked_in')
     const [processingId, setProcessingId] = useState(null)
     const [showDetailModal, setShowDetailModal] = useState(false)
     const [selectedRequest, setSelectedRequest] = useState(null)
@@ -148,7 +148,7 @@ export default function AttendancePage({ pageLayout, currentUser }) {
             <div className="col-span-1">
                 <span className={`px-2 py-1 rounded-full text-xs ${
                     request.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                    request.status === 'approved' ? 'bg-green-100 text-green-700' :
+                    request.status === 'checked_in' ? 'bg-green-100 text-green-700' :
                     'bg-red-100 text-red-700'
                 }`}>
                     {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
@@ -193,8 +193,8 @@ export default function AttendancePage({ pageLayout, currentUser }) {
 
     const getCurrentRequests = () => {
         switch(activeTab) {
-            case 'approved': return approvedRequests
-            case 'rejected': return rejectedRequests
+            case 'checked_in': return approvedRequests
+            case 'checked_out': return rejectedRequests
             default: return pendingRequests
         }
     }
@@ -212,26 +212,19 @@ export default function AttendancePage({ pageLayout, currentUser }) {
                     </div>
 
                     {/* Statistics Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full">
-                        <div className="relative flex flex-col items-start justify-between h-30 w-full bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
-                            <div className="flex flex-col items-start justify-center">
-                                <p className="text-2xl font-semibold">{pendingRequests.length}</p>
-                                <p className="text-sm font-medium text-[rgba(0,0,0,0.6)]">Pending Requests</p>
-                                <p className="text-sm font-medium text-yellow-600">Awaiting Review</p>
-                            </div>
-                        </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full">
                         <div className="relative flex flex-col items-start justify-between h-30 w-full bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
                             <div className="flex flex-col items-start justify-center">
                                 <p className="text-2xl font-semibold">{approvedRequests.length}</p>
-                                <p className="text-sm font-medium text-[rgba(0,0,0,0.6)]">Approved Today</p>
-                                <p className="text-sm font-medium text-green-600">Completed</p>
+                                <p className="text-sm font-medium text-[rgba(0,0,0,0.6)]">On Duty</p>
+                                <p className="text-sm font-medium text-green-600">Current Shifts</p>
                             </div>
                         </div>
                         <div className="relative flex flex-col items-start justify-between h-30 w-full bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
                             <div className="flex flex-col items-start justify-center">
                                 <p className="text-2xl font-semibold">{rejectedRequests.length}</p>
-                                <p className="text-sm font-medium text-[rgba(0,0,0,0.6)]">Rejected</p>
-                                <p className="text-sm font-medium text-red-600">Not Approved</p>
+                                <p className="text-sm font-medium text-[rgba(0,0,0,0.6)]">Past Duties</p>
+                                <p className="text-sm font-medium text-blue-600">Completed Shifts</p>
                             </div>
                         </div>
                     </div>
@@ -239,34 +232,24 @@ export default function AttendancePage({ pageLayout, currentUser }) {
                     {/* Tabs */}
                     <div className="flex flex-row gap-2 w-full border-b border-[rgba(0,0,0,0.2)]">
                         <button
-                            onClick={() => setActiveTab('pending')}
-                            className={`px-4 py-2 font-medium text-sm transition-all ${
-                                activeTab === 'pending' 
-                                    ? 'border-b-2 border-black text-black' 
-                                    : 'text-gray-500 hover:text-gray-700'
-                            }`}
-                        >
-                            Pending ({pendingRequests.length})
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('approved')}
+                            onClick={() => setActiveTab('checked_in')}
                             className={`px-4 py-2 font-medium text-sm transition-all ${
                                 activeTab === 'approved' 
                                     ? 'border-b-2 border-black text-black' 
                                     : 'text-gray-500 hover:text-gray-700'
                             }`}
                         >
-                            Approved ({approvedRequests.length})
+                            Checked In ({approvedRequests.length})
                         </button>
                         <button
-                            onClick={() => setActiveTab('rejected')}
+                            onClick={() => setActiveTab('checked_out')}
                             className={`px-4 py-2 font-medium text-sm transition-all ${
                                 activeTab === 'rejected' 
                                     ? 'border-b-2 border-black text-black' 
                                     : 'text-gray-500 hover:text-gray-700'
                             }`}
                         >
-                            Rejected ({rejectedRequests.length})
+                            Checked Out ({rejectedRequests.length})
                         </button>
                     </div>
 
@@ -274,7 +257,7 @@ export default function AttendancePage({ pageLayout, currentUser }) {
                     <div className="w-full h-auto flex flex-col items-start justify-between rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
                         <div className="flex flex-row items-center justify-start w-full h-15 gap-2 mb-3">
                             <img src={clockIcon} className="h-5" alt="attendance" />
-                            <h2 className="font-medium">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Requests</h2>
+                            <h2 className="font-medium">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Panel</h2>
                         </div>
                         <div className="flex flex-col items-center justify-start w-full gap-3">
                             <div className="w-full overflow-x-auto">
@@ -290,7 +273,7 @@ export default function AttendancePage({ pageLayout, currentUser }) {
                                     </div>
                                     {getCurrentRequests().length > 0 ? (
                                         getCurrentRequests().map((request) => 
-                                            renderRequestRow(request, activeTab === 'pending')
+                                            renderRequestRow(request, activeTab === 'Checked In')
                                         )
                                     ) : (
                                         <div className="col-span-7 text-center py-8 text-gray-400 text-sm">
@@ -304,7 +287,6 @@ export default function AttendancePage({ pageLayout, currentUser }) {
                 </div>
             </div>
 
-            {/* Detail Modal */}
             {showDetailModal && selectedRequest && (
                 <div 
                     className="fixed inset-0 bg-[rgba(0,0,0,0.3)] flex items-center justify-center z-50"
@@ -349,8 +331,8 @@ export default function AttendancePage({ pageLayout, currentUser }) {
                                 <div>
                                     <p className="text-sm text-gray-500">Status</p>
                                     <span className={`inline-block px-2 py-1 rounded-full text-xs ${
-                                        selectedRequest.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                                        selectedRequest.status === 'approved' ? 'bg-green-100 text-green-700' :
+                                        selectedRequest.status === 'checked_in' ? 'bg-yellow-100 text-yellow-700' :
+                                        selectedRequest.status === 'checked_in' ? 'bg-green-100 text-green-700' :
                                         'bg-red-100 text-red-700'
                                     }`}>
                                         {selectedRequest.status.charAt(0).toUpperCase() + selectedRequest.status.slice(1)}

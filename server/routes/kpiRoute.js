@@ -19,26 +19,26 @@ router.get("/top-performers", async (req, res) => {
                 u.last_name,
                 u.position,
                 COUNT(DISTINCT CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out' 
                     THEN a.date 
                 END) as days_present,
                 COALESCE(SUM(CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out' 
                     THEN a.total_hours 
                     ELSE 0 
                 END), 0) as total_hours,
                 COALESCE(AVG(CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out' 
                     THEN a.total_hours 
                 END), 0) as avg_hours_per_day,
                 COALESCE(SUM(CASE 
-                    WHEN a.status = 'approved' AND a.total_hours > 8
+                    WHEN a.status = 'checked_out' AND a.total_hours > 8
                     THEN a.total_hours - 8
                     ELSE 0 
                 END), 0) as overtime_hours,
                 CASE 
                     WHEN ${period === 'monthly' ? 'EXTRACT(DAY FROM DATE_TRUNC(\'month\', CURRENT_DATE) + INTERVAL \'1 month\' - INTERVAL \'1 day\')' : '90'} > 0
-                    THEN (COUNT(DISTINCT CASE WHEN a.status = 'approved' THEN a.date END)::float / ${period === 'monthly' ? 'EXTRACT(DAY FROM DATE_TRUNC(\'month\', CURRENT_DATE) + INTERVAL \'1 month\' - INTERVAL \'1 day\')' : '90'}) * 100
+                    THEN (COUNT(DISTINCT CASE WHEN a.status = 'checked_out' THEN a.date END)::float / ${period === 'monthly' ? 'EXTRACT(DAY FROM DATE_TRUNC(\'month\', CURRENT_DATE) + INTERVAL \'1 month\' - INTERVAL \'1 day\')' : '90'}) * 100
                     ELSE 0
                 END as attendance_rate
             FROM users u
@@ -48,7 +48,7 @@ router.get("/top-performers", async (req, res) => {
                 AND u.status = 'active'
             GROUP BY u.user_id, u.employee_id, u.first_name, u.last_name, u.position
             HAVING COALESCE(SUM(CASE 
-                WHEN a.status = 'approved' 
+                WHEN a.status = 'checked_out' 
                 THEN a.total_hours 
                 ELSE 0 
             END), 0) > 0
@@ -79,26 +79,26 @@ router.get("/bottom-performers", async (req, res) => {
                 u.last_name,
                 u.position,
                 COUNT(DISTINCT CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out' 
                     THEN a.date 
                 END) as days_present,
                 COALESCE(SUM(CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out' 
                     THEN a.total_hours 
                     ELSE 0 
                 END), 0) as total_hours,
                 COALESCE(AVG(CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out' 
                     THEN a.total_hours 
                 END), 0) as avg_hours_per_day,
                 COALESCE(SUM(CASE 
-                    WHEN a.status = 'approved' AND a.total_hours > 8
+                    WHEN a.status = 'checked_out' AND a.total_hours > 8
                     THEN a.total_hours - 8
                     ELSE 0 
                 END), 0) as overtime_hours,
                 CASE 
                     WHEN ${period === 'monthly' ? 'EXTRACT(DAY FROM DATE_TRUNC(\'month\', CURRENT_DATE) + INTERVAL \'1 month\' - INTERVAL \'1 day\')' : '90'} > 0
-                    THEN (COUNT(DISTINCT CASE WHEN a.status = 'approved' THEN a.date END)::float / ${period === 'monthly' ? 'EXTRACT(DAY FROM DATE_TRUNC(\'month\', CURRENT_DATE) + INTERVAL \'1 month\' - INTERVAL \'1 day\')' : '90'}) * 100
+                    THEN (COUNT(DISTINCT CASE WHEN a.status = 'checked_out' THEN a.date END)::float / ${period === 'monthly' ? 'EXTRACT(DAY FROM DATE_TRUNC(\'month\', CURRENT_DATE) + INTERVAL \'1 month\' - INTERVAL \'1 day\')' : '90'}) * 100
                     ELSE 0
                 END as attendance_rate
             FROM users u
@@ -131,7 +131,7 @@ router.get("/monthly-trends", async (req, res) => {
                 COUNT(DISTINCT a.date) as total_days,
                 COALESCE(SUM(a.total_hours) / NULLIF(COUNT(DISTINCT a.user_id), 0), 0) as avg_hours_per_employee
             FROM attendance a
-            WHERE a.status = 'approved'
+            WHERE a.status = 'checked_out'
                 AND a.date >= CURRENT_DATE - INTERVAL '12 months'
             GROUP BY EXTRACT(MONTH FROM a.date), EXTRACT(YEAR FROM a.date), TO_CHAR(a.date, 'Mon')
             ORDER BY year, month
@@ -164,7 +164,7 @@ router.get("/overall-metrics", async (req, res) => {
                     ELSE 0 
                 END), 0) as total_overtime_hours
             FROM attendance a
-            WHERE a.status = 'approved'
+            WHERE a.status = 'checked_out'
                 AND ${dateCondition}
         `)
         
@@ -185,7 +185,7 @@ router.get("/overall-metrics", async (req, res) => {
                     0
                 ) as avg_attendance_rate
             FROM attendance a
-            WHERE a.status = 'approved'
+            WHERE a.status = 'checked_out'
                 AND ${dateCondition}
         `)
         
@@ -217,26 +217,26 @@ router.get("/:user_id", async (req, res) => {
         const currentMonthResult = await pool.query(`
             SELECT 
                 COUNT(DISTINCT CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out' 
                     THEN a.date 
                 END) as days_present,
                 COALESCE(SUM(CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out' 
                     THEN a.total_hours 
                     ELSE 0 
                 END), 0) as total_hours,
                 COALESCE(AVG(CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out' 
                     THEN a.total_hours 
                 END), 0) as avg_hours_per_day,
                 COALESCE(SUM(CASE 
-                    WHEN a.status = 'approved' AND a.total_hours > 8
+                    WHEN a.status = 'checked_out' AND a.total_hours > 8
                     THEN a.total_hours - 8
                     ELSE 0 
                 END), 0) as overtime_hours
             FROM attendance a
             WHERE a.user_id = $1
-                AND a.status = 'approved'
+                AND a.status = 'checked_out'
                 AND EXTRACT(MONTH FROM a.date) = EXTRACT(MONTH FROM CURRENT_DATE)
                 AND EXTRACT(YEAR FROM a.date) = EXTRACT(YEAR FROM CURRENT_DATE)
         `, [user_id])

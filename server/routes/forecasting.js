@@ -34,7 +34,7 @@ router.get("/payroll-historical", async (req, res) => {
                     COALESCE(SUM(a.total_hours), 0) as total_hours
                 FROM attendance a
                 INNER JOIN users u ON a.user_id = u.user_id
-                WHERE a.status = 'approved'
+                WHERE a.status = 'checked_out'
                     AND a.date BETWEEN $1 AND $2
             `
             const stats = await pool.query(payrollQuery, [row.start_date, row.end_date])
@@ -76,7 +76,7 @@ router.get("/attendance-historical", async (req, res) => {
                 COUNT(DISTINCT a.date) as total_days_with_attendance,
                 COUNT(*) as total_attendance_records
             FROM attendance a
-            WHERE a.status = 'approved'
+            WHERE a.status = 'checked_out'
                 AND a.date >= CURRENT_DATE - INTERVAL '24 months'
             GROUP BY EXTRACT(MONTH FROM a.date), EXTRACT(YEAR FROM a.date), TO_CHAR(a.date, 'Mon')
             ORDER BY year, month
@@ -100,20 +100,20 @@ router.get("/employee-attendance-current", async (req, res) => {
                 u.last_name,
                 u.position,
                 COUNT(DISTINCT CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out'
                     THEN a.date 
                 END) as days_present,
                 COALESCE(SUM(CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out'
                     THEN a.total_hours 
                     ELSE 0 
                 END), 0) as total_hours_worked,
                 COALESCE(AVG(CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out' 
                     THEN a.total_hours 
                 END), 0) as avg_hours_per_day,
                 COALESCE(SUM(CASE 
-                    WHEN a.status = 'approved' AND a.total_hours > 8
+                    WHEN a.status = 'checked_out' AND a.total_hours > 8
                     THEN a.total_hours - 8
                     ELSE 0 
                 END), 0) as overtime_hours
@@ -144,20 +144,20 @@ router.get("/department-attendance", async (req, res) => {
                 u.employee_id as code,
                 1 as employee_count,
                 COUNT(DISTINCT CASE 
-                    WHEN a.status = 'approved' 
+                    WHEN a.status = 'checked_out' 
                         AND EXTRACT(MONTH FROM a.date) = EXTRACT(MONTH FROM CURRENT_DATE)
                         AND EXTRACT(YEAR FROM a.date) = EXTRACT(YEAR FROM CURRENT_DATE)
                     THEN a.date 
                 END) as total_attendance_days,
                 COALESCE(SUM(CASE 
-                    WHEN a.status = 'approved'
+                    WHEN a.status = 'checked_out'
                         AND EXTRACT(MONTH FROM a.date) = EXTRACT(MONTH FROM CURRENT_DATE)
                         AND EXTRACT(YEAR FROM a.date) = EXTRACT(YEAR FROM CURRENT_DATE)
                     THEN a.total_hours 
                     ELSE 0 
                 END), 0) as total_hours,
                 COALESCE(AVG(CASE 
-                    WHEN a.status = 'approved'
+                    WHEN a.status = 'checked_out'
                         AND EXTRACT(MONTH FROM a.date) = EXTRACT(MONTH FROM CURRENT_DATE)
                         AND EXTRACT(YEAR FROM a.date) = EXTRACT(YEAR FROM CURRENT_DATE)
                     THEN a.total_hours 
@@ -168,7 +168,7 @@ router.get("/department-attendance", async (req, res) => {
                 AND u.role IN ('employee', 'manager', 'admin')
             GROUP BY u.user_id, u.first_name, u.last_name, u.employee_id
             HAVING COALESCE(SUM(CASE 
-                WHEN a.status = 'approved'
+                WHEN a.status = 'checked_out'
                     AND EXTRACT(MONTH FROM a.date) = EXTRACT(MONTH FROM CURRENT_DATE)
                     AND EXTRACT(YEAR FROM a.date) = EXTRACT(YEAR FROM CURRENT_DATE)
                 THEN a.total_hours 
@@ -200,7 +200,7 @@ router.get("/employee-attendance-trend/:userId", async (req, res) => {
                 AVG(a.total_hours) as avg_hours_per_day
             FROM attendance a
             WHERE a.user_id = $1
-                AND a.status = 'approved'
+                AND a.status = 'checked_out'
                 AND a.date >= CURRENT_DATE - INTERVAL '12 months'
             GROUP BY EXTRACT(MONTH FROM a.date), EXTRACT(YEAR FROM a.date), TO_CHAR(a.date, 'Mon')
             ORDER BY year, month
@@ -217,7 +217,7 @@ router.get("/employee-attendance-trend/:userId", async (req, res) => {
 router.get("/model-info", async (req, res) => {
     try {
         const recordCount = await pool.query(`
-            SELECT COUNT(*) as count FROM attendance WHERE status = 'approved'
+            SELECT COUNT(*) as count FROM attendance WHERE status = 'checked_out'
         `)
         
         const dateRange = await pool.query(`
@@ -225,13 +225,13 @@ router.get("/model-info", async (req, res) => {
                 MIN(date) as min_date,
                 MAX(date) as max_date
             FROM attendance
-            WHERE status = 'approved'
+            WHERE status = 'checked_out'
         `)
         
         const monthsOfData = await pool.query(`
             SELECT COUNT(DISTINCT TO_CHAR(date, 'YYYY-MM')) as months
             FROM attendance
-            WHERE status = 'approved'
+            WHERE status = 'checked_out'
         `)
         
         return res.json({
@@ -260,7 +260,7 @@ router.get("/attendance-statistics", async (req, res) => {
                 SUM(total_hours) as total_hours,
                 AVG(total_hours) as avg_hours
             FROM attendance
-            WHERE status = 'approved'
+            WHERE status = 'checked_out'
                 AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE)
                 AND EXTRACT(YEAR FROM date) = EXTRACT(YEAR FROM CURRENT_DATE)
         `)
@@ -274,7 +274,7 @@ router.get("/attendance-statistics", async (req, res) => {
         const workingDays = await pool.query(`
             SELECT COUNT(DISTINCT date) as days
             FROM attendance
-            WHERE status = 'approved'
+            WHERE status = 'checked_out'
                 AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE)
                 AND EXTRACT(YEAR FROM date) = EXTRACT(YEAR FROM CURRENT_DATE)
         `)
