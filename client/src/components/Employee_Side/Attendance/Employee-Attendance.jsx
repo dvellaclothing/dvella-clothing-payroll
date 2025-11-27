@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { API_URL } from "../../../config"
 import Header from "../../Main/Header"
+import Swal from "sweetalert2"
 
 const attendanceIcon = "/images/performance.png"
 const calendarIcon = "/images/dashboard.png"
@@ -96,15 +97,36 @@ export default function EmployeeAttendance({ pageLayout, currentUser }) {
                 setTodayAttendance(data.attendance)
                 setIsCheckedIn(true)
                 setCheckInTime(timeString)
-                alert('✅ Checked in successfully!')
+                Swal.fire({
+                    toast: true,
+                    position: "top-end",
+                    icon: "success",
+                    title: "Checked in successfully",
+                    showConfirmButton: false,
+                    timer: 2000
+                })
                 await fetchAttendance()
                 await fetchAttendanceRecords()
             } else {
-                alert(data.message || 'Failed to check in')
+                Swal.fire({
+                    toast: true,
+                    position: "top-end",
+                    icon: "error",
+                    title: data.message || 'Failed to check in',
+                    showConfirmButton: false,
+                    timer: 2000
+                })
             }
         } catch (error) {
             console.error('Error checking in:', error)
-            alert('Error checking in. Please try again.')
+            Swal.fire({
+                toast: true,
+                position: "top-end",
+                icon: "error",
+                title: "Error checking in. Please try again",
+                showConfirmButton: false,
+                timer: 2000
+            })
         } finally {
             setProcessing(false)
         }
@@ -131,15 +153,36 @@ export default function EmployeeAttendance({ pageLayout, currentUser }) {
                 setTodayAttendance(data.attendance)
                 setIsCheckedIn(false)
                 setCheckInTime(null)
-                alert('✅ Checked out successfully!')
+                Swal.fire({
+                    toast: true,
+                    position: "top-end",
+                    icon: "success",
+                    title: "Checked out successfully",
+                    showConfirmButton: false,
+                    timer: 2000
+                })
                 await fetchAttendance()
                 await fetchAttendanceRecords()
             } else {
-                alert(data.message || 'Failed to check out')
+                Swal.fire({
+                    toast: true,
+                    position: "top-end",
+                    icon: "error",
+                    title: data.message || 'Failed to check out',
+                    showConfirmButton: false,
+                    timer: 2000
+                })
             }
         } catch (error) {
             console.error('Error checking out:', error)
-            alert('Error checking out. Please try again.')
+            Swal.fire({
+                toast: true,
+                position: "top-end",
+                icon: "error",
+                title: "Error checking out. Please try again",
+                showConfirmButton: false,
+                timer: 2000
+            })
         } finally {
             setProcessing(false)
         }
