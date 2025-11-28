@@ -236,7 +236,6 @@ function LoginForm() {
 
 export default function LoginPage() {
     const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
-    console.log("Google Client ID:", GOOGLE_CLIENT_ID)
     if (!GOOGLE_CLIENT_ID) {
         return <div className="p-4 text-red-600">Error: Google Client ID not found in environment variables</div>
     }
