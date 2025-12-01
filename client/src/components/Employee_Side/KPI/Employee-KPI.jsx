@@ -86,7 +86,6 @@ export default function EmployeeKPI({ pageLayout, currentUser }) {
                     )}
                 </div>
 
-                {/* Summary Stats */}
                 {kpiData?.summary && (
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 w-full">
                         <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -94,7 +93,7 @@ export default function EmployeeKPI({ pageLayout, currentUser }) {
                                 <img src={clockIcon} className="h-5 opacity-60" alt="hours" />
                                 <p className="text-sm text-gray-600">Total Hours</p>
                             </div>
-                            <p className="text-2xl font-bold">{kpiData.summary.total_hours.toFixed(1)}h</p>
+                            <p className="text-2xl font-bold">{(kpiData?.summary?.total_hours || 0).toFixed(1)}h</p>
                             <p className="text-xs text-gray-500 mt-1">This month</p>
                         </div>
 
@@ -103,19 +102,19 @@ export default function EmployeeKPI({ pageLayout, currentUser }) {
                                 <img src={trendIcon} className="h-5 opacity-60" alt="days" />
                                 <p className="text-sm text-gray-600">Days Present</p>
                             </div>
-                            <p className="text-2xl font-bold">{kpiData.summary.days_present}</p>
-                            <p className="text-xs text-gray-500 mt-1">out of {kpiData.summary.working_days} days</p>
+                            <p className="text-2xl font-bold">{kpiData?.summary?.days_present || 0}</p>
+                            <p className="text-xs text-gray-500 mt-1">out of {kpiData?.summary?.working_days || 0} days</p>
                         </div>
 
                         <div className="bg-white rounded-xl border border-gray-200 p-4">
                             <div className="flex items-center gap-2 mb-2">
                                 <p className="text-sm text-gray-600">Attendance Rate</p>
                             </div>
-                            <p className="text-2xl font-bold">{kpiData.summary.attendance_rate.toFixed(1)}%</p>
+                            <p className="text-2xl font-bold">{(kpiData?.summary?.attendance_rate || 0).toFixed(1)}%</p>
                             <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
                                 <div 
-                                    className={`h-1.5 rounded-full ${getProgressBarColor(kpiData.summary.attendance_rate, 95)}`}
-                                    style={{ width: `${Math.min(kpiData.summary.attendance_rate, 100)}%` }}
+                                    className={`h-1.5 rounded-full ${getProgressBarColor(kpiData?.summary?.attendance_rate || 0, 95)}`}
+                                    style={{ width: `${Math.min(kpiData?.summary?.attendance_rate || 0, 100)}%` }}
                                 />
                             </div>
                         </div>
@@ -124,7 +123,7 @@ export default function EmployeeKPI({ pageLayout, currentUser }) {
                             <div className="flex items-center gap-2 mb-2">
                                 <p className="text-sm text-gray-600">Overtime Hours</p>
                             </div>
-                            <p className="text-2xl font-bold">{kpiData.summary.overtime_hours.toFixed(1)}h</p>
+                            <p className="text-2xl font-bold">{(kpiData?.summary?.overtime_hours || 0).toFixed(1)}h</p>
                             <p className="text-xs text-gray-500 mt-1">Extra hours worked</p>
                         </div>
                     </div>
@@ -139,40 +138,47 @@ export default function EmployeeKPI({ pageLayout, currentUser }) {
                     
                     {loading ? (
                         <div className="text-center py-10 text-gray-500">Loading metrics...</div>
-                    ) : kpiData?.metrics && kpiData.metrics.length > 0 ? (
+                    ) : kpiData?.metrics?.length > 0 ? (
                         <div className="space-y-5">
-                            {kpiData.metrics.map((metric, index) => (
-                                <div key={index} className="flex flex-col gap-3 p-5 border border-gray-200 rounded-xl hover:shadow-md transition-shadow bg-gray-50">
-                                    <div className="flex flex-row items-start justify-between">
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2">
-                                                <h3 className="font-semibold text-base">{metric.name}</h3>
-                                                <span className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded text-xs font-medium">
-                                                    {metric.weight}%
-                                                </span>
+                            {kpiData.metrics.map((metric, index) => {
+                                // Add null checks and default values
+                                const score = metric?.score || 0;
+                                const target = metric?.target_value || 1; // Avoid division by zero
+                                const percentage = target > 0 ? (score / target) * 100 : 0;
+                                
+                                return (
+                                    <div key={index} className="flex flex-col gap-3 p-5 border border-gray-200 rounded-xl hover:shadow-md transition-shadow bg-gray-50">
+                                        <div className="flex flex-row items-start justify-between">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="font-semibold text-base">{metric?.name || 'Unnamed Metric'}</h3>
+                                                    <span className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded text-xs font-medium">
+                                                        {metric?.weight || 0}%
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-gray-600 mt-1">{metric?.description || ''}</p>
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    Target: {metric?.target_value || 0} {metric?.unit || ''}
+                                                </p>
                                             </div>
-                                            <p className="text-xs text-gray-600 mt-1">{metric.description}</p>
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                Target: {metric.target_value} {metric.unit}
-                                            </p>
+                                            <div className="text-right">
+                                                <p className={`text-3xl font-bold ${getScoreColor(score, target)}`}>
+                                                    {score.toFixed(1)}
+                                                </p>
+                                                <p className="text-xs text-gray-600 mt-1">
+                                                    {Math.min(percentage, 100).toFixed(0)}% of target
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div className="text-right">
-                                            <p className={`text-3xl font-bold ${getScoreColor(metric.score, metric.target_value)}`}>
-                                                {metric.score.toFixed(1)}
-                                            </p>
-                                            <p className="text-xs text-gray-600 mt-1">
-                                                {((metric.score / metric.target_value) * 100).toFixed(0)}% of target
-                                            </p>
+                                        <div className="w-full bg-gray-300 rounded-full h-3">
+                                            <div 
+                                                className={`h-3 rounded-full transition-all duration-500 ${getProgressBarColor(score, target)}`}
+                                                style={{ width: `${Math.min(percentage, 100)}%` }}
+                                            />
                                         </div>
                                     </div>
-                                    <div className="w-full bg-gray-300 rounded-full h-3">
-                                        <div 
-                                            className={`h-3 rounded-full transition-all duration-500 ${getProgressBarColor(metric.score, metric.target_value)}`}
-                                            style={{ width: `${Math.min((metric.score / metric.target_value) * 100, 100)}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     ) : (
                         <div className="text-center py-10 text-gray-500">

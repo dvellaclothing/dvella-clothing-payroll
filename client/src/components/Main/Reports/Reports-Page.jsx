@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react"
 import Header from "../Header"
 import { API_URL } from "../../../config"
-import { Bar, Doughnut } from 'react-chartjs-2'
+import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import {
     Chart as ChartJS,
     CategoryScale,
     LinearScale,
     BarElement,
+    PointElement,
+    LineElement,
     ArcElement,
     Title,
     Tooltip,
@@ -17,6 +19,8 @@ ChartJS.register(
     CategoryScale,
     LinearScale,
     BarElement,
+    PointElement,
+    LineElement,
     ArcElement,
     Title,
     Tooltip,
@@ -43,7 +47,6 @@ export default function ReportsPage({ pageLayout, currentUser }) {
     const [departments, setDepartments] = useState([])
     const [loading, setLoading] = useState(true)
     
-    // Filters
     const [filters, setFilters] = useState({
         startDate: '2025-01-01',
         endDate: '2025-12-31',
@@ -63,7 +66,6 @@ export default function ReportsPage({ pageLayout, currentUser }) {
         try {
             setLoading(true)
             
-            // Fetch payroll reports
             const reportsRes = await fetch(
                 `${API_URL}/api/reports/payroll-reports?` +
                 `startDate=${filters.startDate}&endDate=${filters.endDate}&` +
@@ -72,22 +74,18 @@ export default function ReportsPage({ pageLayout, currentUser }) {
             const reportsData = await reportsRes.json()
             setReports(reportsData.reports || [])
 
-            // Fetch payroll trend
             const trendRes = await fetch(`${API_URL}/api/reports/payroll-trend?year=2025`)
             const trendData = await trendRes.json()
             setPayrollTrend(trendData.trend || [])
 
-            // Fetch department breakdown
             const deptRes = await fetch(`${API_URL}/api/reports/department-breakdown`)
             const deptData = await deptRes.json()
             setDepartmentBreakdown(deptData.departments || [])
 
-            // Fetch statistics
             const statsRes = await fetch(`${API_URL}/api/reports/statistics`)
             const statsData = await statsRes.json()
             setStatistics(statsData.statistics || statistics)
 
-            // Fetch departments for filter
             const deptsRes = await fetch(`${API_URL}/api/reports/departments`)
             const deptsData = await deptsRes.json()
             setDepartments(deptsData.departments || [])
@@ -110,24 +108,42 @@ export default function ReportsPage({ pageLayout, currentUser }) {
         }
     }
 
-    // Chart data for hours worked trend - BAR CHART
     const trendChartData = {
         labels: payrollTrend.map(t => t.month_name),
-        datasets: [{
-            label: 'Total Hours Worked',
-            data: payrollTrend.map(t => parseFloat(t.total_hours) || 0),
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            borderColor: 'rgb(0, 0, 0)',
-            borderWidth: 1,
-            yAxisID: 'y'
-        }, {
-            label: 'Total Payroll',
-            data: payrollTrend.map(t => parseFloat(t.total_net) || 0),
-            backgroundColor: 'rgba(100, 100, 100, 0.6)',
-            borderColor: 'rgb(100, 100, 100)',
-            borderWidth: 1,
-            yAxisID: 'y1'
-        }]
+        datasets: [
+            {
+                label: 'Total Hours',
+                data: payrollTrend.map(t => parseFloat(t.total_hours) || 0),
+                borderColor: 'rgb(59, 130, 246)',
+                backgroundColor: 'transparent',
+                tension: 0,
+                fill: false,
+                pointBackgroundColor: 'rgb(59, 130, 246)',
+                pointBorderColor: 'rgb(59, 130, 246)',
+                pointBorderWidth: 2,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                pointHitRadius: 10,
+                borderWidth: 2,
+                yAxisID: 'y'
+            },
+            {
+                label: 'Total Payroll',
+                data: payrollTrend.map(t => parseFloat(t.total_net) || 0),
+                borderColor: 'rgb(234, 179, 8)',
+                backgroundColor: 'transparent',
+                tension: 0,
+                fill: false,
+                pointBackgroundColor: 'rgb(234, 179, 8)',
+                pointBorderColor: 'rgb(234, 179, 8)',
+                pointBorderWidth: 2,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                pointHitRadius: 10,
+                borderWidth: 2,
+                yAxisID: 'y1'
+            }
+        ]
     }
 
     const trendChartOptions = {
@@ -140,67 +156,123 @@ export default function ReportsPage({ pageLayout, currentUser }) {
         plugins: {
             legend: {
                 display: true,
-                position: 'bottom'
+                position: 'top',
+                align: 'end',
+                labels: {
+                    usePointStyle: true,
+                    padding: 20,
+                    font: {
+                        size: 12,
+                    },
+                    boxWidth: 8,
+                    boxHeight: 8,
+                }
+            },
+            tooltip: {
+                enabled: true,
+                backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                padding: 12,
+                cornerRadius: 8,
+                titleFont: {
+                    size: 13,
+                    weight: '600',
+                },
+                bodyFont: {
+                    size: 12,
+                },
             }
         },
         scales: {
+            x: {
+                grid: {
+                    display: true,
+                    color: 'rgba(0, 0, 0, 0.05)',
+                    drawBorder: false,
+                },
+                ticks: {
+                    font: {
+                        size: 11,
+                    },
+                }
+            },
             y: {
                 type: 'linear',
                 display: true,
                 position: 'left',
+                grid: {
+                    color: 'rgba(0, 0, 0, 0.1)',
+                    drawBorder: false,
+                },
+                ticks: {
+                    font: {
+                        size: 11,
+                    },
+                },
                 title: {
                     display: true,
-                    text: 'Hours'
+                    text: 'Hours',
+                    font: {
+                        size: 12,
+                    }
                 }
             },
             y1: {
                 type: 'linear',
                 display: true,
                 position: 'right',
-                title: {
-                    display: true,
-                    text: 'Payroll (₱)'
-                },
                 grid: {
                     drawOnChartArea: false,
                 },
                 ticks: {
+                    font: {
+                        size: 11,
+                    },
                     callback: function(value) {
                         return '₱' + (value / 1000).toFixed(0) + 'K'
                     }
+                },
+                title: {
+                    display: true,
+                    text: 'Payroll (₱)',
+                    font: {
+                        size: 12,
+                    }
                 }
             }
+        },
+        animation: {
+            duration: 750,
+            easing: 'easeInOutQuart',
         }
     }
 
-    // Chart data for employee breakdown (by hours) - VIBRANT COLORS
     const deptChartData = {
         labels: departmentBreakdown.map(d => d.code || d.name),
         datasets: [{
             data: departmentBreakdown.map(d => parseFloat(d.total_hours_this_month) || 0),
             backgroundColor: [
-                'rgba(0, 0, 0, 0.9)',         // Deep Black
-                'rgba(64, 64, 64, 0.85)',     // Dark Charcoal
-                'rgba(96, 96, 96, 0.85)',     // Medium Gray
-                'rgba(128, 128, 128, 0.85)',  // True Gray
-                'rgba(160, 160, 160, 0.85)',  // Light Gray
-                'rgba(192, 192, 192, 0.80)',  // Silver
-                'rgba(224, 224, 224, 0.75)',  // Soft Gray
-                'rgba(48, 48, 48, 0.90)',     // Dark Slate
-                'rgba(112, 112, 112, 0.85)',  // Medium Slate
-                'rgba(176, 176, 176, 0.80)',  // Light Slate
+                'rgba(59, 130, 246, 0.8)',
+                'rgba(220, 38, 38, 0.8)',
+                'rgba(234, 179, 8, 0.8)',
+                'rgba(34, 197, 94, 0.8)',
+                'rgba(139, 92, 246, 0.8)',
+                'rgba(236, 72, 153, 0.8)',
+                'rgba(251, 146, 60, 0.8)',
+                'rgba(20, 184, 166, 0.8)',
+                'rgba(99, 102, 241, 0.8)',
+                'rgba(244, 63, 94, 0.8)',
             ],
             borderColor: [
-                'rgba(0, 0, 0, 1)',
-                'rgba(64, 64, 64, 1)',
-                'rgba(96, 96, 96, 1)',
-                'rgba(128, 128, 128, 1)',
-                'rgba(160, 160, 160, 1)',
-                'rgba(192, 192, 192, 1)',
-                'rgba(224, 224, 224, 1)',
-                'rgba(48, 48, 48, 1)',
-                'rgba(112, 112, 112, 1)',
-                'rgba(176, 176, 176, 1)',
+                'rgb(59, 130, 246)',
+                'rgb(220, 38, 38)',
+                'rgb(234, 179, 8)',
+                'rgb(34, 197, 94)',
+                'rgb(139, 92, 246)',
+                'rgb(236, 72, 153)',
+                'rgb(251, 146, 60)',
+                'rgb(20, 184, 166)',
+                'rgb(99, 102, 241)',
+                'rgb(244, 63, 94)',
             ],
             borderWidth: 2
         }]
@@ -220,6 +292,16 @@ export default function ReportsPage({ pageLayout, currentUser }) {
                 }
             },
             tooltip: {
+                backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                padding: 12,
+                cornerRadius: 8,
+                titleFont: {
+                    size: 13,
+                    weight: '600',
+                },
+                bodyFont: {
+                    size: 12,
+                },
                 callbacks: {
                     label: function(context) {
                         return context.label + ': ' + context.parsed + ' hours'
@@ -268,7 +350,6 @@ export default function ReportsPage({ pageLayout, currentUser }) {
                 <Header pageLayout={pageLayout} pageTitle="Reports" pageDescription="Analytics and reporting tools" currentUser={currentUser} />
                 
                 <div className="flex flex-col items-center justify-start h-9/10 w-full p-5 gap-5 overflow-y-scroll">
-                    {/* Header with actions */}
                     <div className="flex flex-row items-center justify-between w-full">
                         <div className="flex flex-col items-start justify-start">
                             <h2 className="text-md font-medium">Attendance & Payroll Reports</h2>
@@ -292,7 +373,6 @@ export default function ReportsPage({ pageLayout, currentUser }) {
                         </div>
                     </div>
 
-                    {/* Filters Panel */}
                     {showFilters && (
                         <div className="w-full bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
                             <h3 className="font-medium mb-4">Report Filters</h3>
@@ -347,17 +427,15 @@ export default function ReportsPage({ pageLayout, currentUser }) {
                         </div>
                     )}
 
-                    {/* Charts Row */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 w-full">
-                        {/* Monthly Hours & Payroll Trend */}
-                        <div className="w-full h-[300px] bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
+                        <div className="w-full h-[350px] bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
                             <div className="flex flex-row items-center gap-2 mb-4">
                                 <img src={chartIcon} className="h-5" alt="chart" />
                                 <h3 className="font-medium">Monthly Hours & Payroll Trend</h3>
                             </div>
-                            <div className="h-[220px]">
+                            <div className="h-[270px]">
                                 {payrollTrend.length > 0 ? (
-                                    <Bar data={trendChartData} options={trendChartOptions} />
+                                    <Line data={trendChartData} options={trendChartOptions} />
                                 ) : (
                                     <div className="flex items-center justify-center h-full text-gray-400">
                                         No trend data available
@@ -366,13 +444,12 @@ export default function ReportsPage({ pageLayout, currentUser }) {
                             </div>
                         </div>
 
-                        {/* Top Employees by Hours */}
-                        <div className="w-full h-[300px] bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
+                        <div className="w-full h-[350px] bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
                             <div className="flex flex-row items-center gap-2 mb-4">
                                 <img src={departmentIcon} className="h-5" alt="employees" />
                                 <h3 className="font-medium">Top 10 Employees by Hours (This Month)</h3>
                             </div>
-                            <div className="h-[220px]">
+                            <div className="h-[270px]">
                                 {departmentBreakdown.length > 0 ? (
                                     <Doughnut data={deptChartData} options={deptChartOptions} />
                                 ) : (
@@ -384,7 +461,6 @@ export default function ReportsPage({ pageLayout, currentUser }) {
                         </div>
                     </div>
 
-                    {/* Detailed Payroll Report */}
                     <div className="w-full bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
                         <div className="flex flex-row items-center gap-2 mb-4">
                             <img src={reportIcon} className="h-5" alt="report" />
@@ -457,7 +533,6 @@ export default function ReportsPage({ pageLayout, currentUser }) {
                         </div>
                     </div>
 
-                    {/* Period Details Modal */}
                     {selectedPeriod && periodDetails.length > 0 && (
                         <div className="fixed inset-0 bg-[rgba(0,0,0,0.2)] flex items-center justify-center z-50" onClick={() => setSelectedPeriod(null)}>
                             <div className="bg-white rounded-2xl p-6 max-w-6xl w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -504,7 +579,6 @@ export default function ReportsPage({ pageLayout, currentUser }) {
                         </div>
                     )}
 
-                    {/* Statistics Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-5 w-full">
                         <div className="bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
                             <p className="text-3xl font-semibold">{statistics.totalRecords.toLocaleString()}</p>

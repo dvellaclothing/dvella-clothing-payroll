@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react"
 import Header from "../Header"
 import { API_URL } from "../../../config"
-import { Bar } from 'react-chartjs-2'
+import { Line } from 'react-chartjs-2'
 import {
     Chart as ChartJS,
     CategoryScale,
     LinearScale,
-    BarElement,
+    PointElement,
+    LineElement,
     Title,
     Tooltip,
     Legend
@@ -15,7 +16,8 @@ import {
 ChartJS.register(
     CategoryScale,
     LinearScale,
-    BarElement,
+    PointElement,
+    LineElement,
     Title,
     Tooltip,
     Legend
@@ -70,7 +72,7 @@ export default function ForecastingPage({ pageLayout, currentUser }) {
             setModelInfo(modelData.modelInfo || modelInfo)
 
             // Generate forecasts using simple linear regression
-            if (payrollData.historical && payrollData.historical.length > 0) {
+            if (payrollData.historical?.length > 0) {
                 const forecast = generatePayrollForecast(payrollData.historical)
                 setPayrollForecast(forecast)
                 
@@ -79,7 +81,7 @@ export default function ForecastingPage({ pageLayout, currentUser }) {
                 setForecastMetrics(prev => ({ ...prev, payrollGrowth: growth }))
             }
 
-            if (attendanceData.historical && attendanceData.historical.length > 0) {
+            if (attendanceData.historical?.length > 0) {
                 const forecast = generateAttendanceForecast(attendanceData.historical)
                 setAttendanceForecast(forecast)
                 
@@ -97,41 +99,47 @@ export default function ForecastingPage({ pageLayout, currentUser }) {
 
     // Simple linear regression for forecasting
     const generatePayrollForecast = (historical) => {
-        if (historical.length < 3) return []
+    if (historical.length < 3) return []
 
-        const n = historical.length
-        const values = historical.map(h => parseFloat(h.total_net))
-        
-        // Calculate trend
-        let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0
-        for (let i = 0; i < n; i++) {
-            sumX += i
-            sumY += values[i]
-            sumXY += i * values[i]
-            sumX2 += i * i
-        }
-        
-        const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)
-        const intercept = (sumY - slope * sumX) / n
-        
-        // Generate 12 months forecast
-        const forecast = []
-        const monthNames = ['Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov']
-        
-        for (let i = 0; i < 12; i++) {
-            const index = n + i
-            const predictedValue = slope * index + intercept
-            const variance = predictedValue * 0.05 * (Math.random() - 0.5)
-            
-            forecast.push({
-                month: monthNames[i],
-                value: Math.max(0, predictedValue + variance),
-                isProjection: true
-            })
-        }
-        
-        return forecast
+    const n = historical.length
+    const values = historical.map(h => parseFloat(h.total_net))
+    
+    // Calculate trend
+    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0
+    for (let i = 0; i < n; i++) {
+        sumX += i
+        sumY += values[i]
+        sumXY += i * values[i]
+        sumX2 += i * i
     }
+    
+    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)
+    const intercept = (sumY - slope * sumX) / n
+    
+    // Generate 12 months forecast starting from the next month
+    const forecast = []
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    
+    // Get current date
+    const now = new Date()
+    const currentMonth = now.getMonth() // 0-11 (Jan-Dec)
+    
+    for (let i = 0; i < 12; i++) {
+        const monthIndex = (currentMonth + i) % 12
+        const year = now.getFullYear() + Math.floor((currentMonth + i) / 12)
+        const predictedValue = slope * (n + i) + intercept
+        const variance = predictedValue * 0.05 * (Math.random() - 0.5)
+        
+        forecast.push({
+            month: monthNames[monthIndex],
+            year: year,
+            value: Math.max(0, predictedValue + variance),
+            isProjection: true
+        })
+    }
+    
+    return forecast
+}
 
     const generateAttendanceForecast = (historical) => {
         if (historical.length < 3) return []
@@ -153,11 +161,10 @@ export default function ForecastingPage({ pageLayout, currentUser }) {
         
         // Generate 12 months forecast
         const forecast = []
-        const monthNames = ['Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov']
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
         
         for (let i = 0; i < 12; i++) {
-            const index = n + i
-            const predictedValue = slope * index + intercept
+            const predictedValue = slope * (n + i) + intercept
             const variance = predictedValue * 0.03 * (Math.random() - 0.5)
             
             forecast.push({
@@ -188,7 +195,7 @@ export default function ForecastingPage({ pageLayout, currentUser }) {
         return ((lastForecast - lastHistorical) / lastHistorical * 100).toFixed(1)
     }
 
-    // Attendance chart data - BAR CHART
+    // Attendance chart data - LINE CHART
     const attendanceChartData = {
         labels: [
             ...historicalAttendance.map(h => h.month_name),
@@ -201,9 +208,16 @@ export default function ForecastingPage({ pageLayout, currentUser }) {
                     ...historicalAttendance.map(h => parseFloat(h.total_hours)),
                     ...Array(attendanceForecast.length).fill(null)
                 ],
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                borderColor: 'rgb(0, 0, 0)',
-                borderWidth: 1
+                borderColor: 'rgb(34, 197, 94)',
+                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                borderWidth: 2,
+                tension: 0.3,
+                fill: true,
+                pointBackgroundColor: 'white',
+                pointBorderColor: 'rgb(34, 197, 94)',
+                pointBorderWidth: 2,
+                pointRadius: 4,
+                pointHoverRadius: 6
             },
             {
                 label: 'Forecast Hours',
@@ -211,53 +225,21 @@ export default function ForecastingPage({ pageLayout, currentUser }) {
                     ...Array(historicalAttendance.length).fill(null),
                     ...attendanceForecast.map(f => f.value)
                 ],
-                backgroundColor: 'rgba(150, 150, 150, 0.6)',
-                borderColor: 'rgb(150, 150, 150)',
-                borderWidth: 1
+                borderColor: 'rgb(156, 163, 175)',
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                borderDash: [5, 5],
+                tension: 0.3,
+                pointBackgroundColor: 'white',
+                pointBorderColor: 'rgb(156, 163, 175)',
+                pointBorderWidth: 2,
+                pointRadius: 4,
+                pointHoverRadius: 6
             }
         ]
     }
 
-    const attendanceChartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                display: true,
-                position: 'bottom',
-                labels: {
-                    usePointStyle: true,
-                    padding: 15
-                }
-            },
-            tooltip: {
-                callbacks: {
-                    label: function(context) {
-                        let label = context.dataset.label || ''
-                        if (label) {
-                            label += ': '
-                        }
-                        if (context.parsed.y !== null) {
-                            label += context.parsed.y.toFixed(0) + ' hours'
-                        }
-                        return label
-                    }
-                }
-            }
-        },
-        scales: {
-            y: {
-                beginAtZero: false,
-                ticks: {
-                    callback: function(value) {
-                        return value.toFixed(0) + 'h'
-                    }
-                }
-            }
-        }
-    }
-
-    // Payroll chart data - BAR CHART
+    // Payroll chart data - LINE CHART
     const payrollChartData = {
         labels: [
             ...historicalPayroll.map(h => h.month_name),
@@ -270,9 +252,11 @@ export default function ForecastingPage({ pageLayout, currentUser }) {
                     ...historicalPayroll.map(h => parseFloat(h.total_net)),
                     ...Array(payrollForecast.length).fill(null)
                 ],
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                borderColor: 'rgb(0, 0, 0)',
-                borderWidth: 1
+                borderColor: 'rgb(59, 130, 246)',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                borderWidth: 2,
+                tension: 0.3,
+                fill: true
             },
             {
                 label: 'Forecast',
@@ -280,62 +264,54 @@ export default function ForecastingPage({ pageLayout, currentUser }) {
                     ...Array(historicalPayroll.length).fill(null),
                     ...payrollForecast.map(f => f.value)
                 ],
-                backgroundColor: 'rgba(150, 150, 150, 0.6)',
-                borderColor: 'rgb(150, 150, 150)',
-                borderWidth: 1
+                borderColor: 'rgb(156, 163, 175)',
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                borderDash: [5, 5],
+                tension: 0.3
             }
         ]
-    }
+    };
 
-    const payrollChartOptions = {
+    const chartOptions = {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: {
+            mode: 'index',
+            intersect: false,
+        },
         plugins: {
             legend: {
-                display: true,
-                position: 'bottom',
-                labels: {
-                    usePointStyle: true,
-                    padding: 15
-                }
+                position: 'top',
             },
             tooltip: {
-                callbacks: {
-                    label: function(context) {
-                        let label = context.dataset.label || ''
-                        if (label) {
-                            label += ': '
-                        }
-                        if (context.parsed.y !== null) {
-                            label += '₱' + context.parsed.y.toLocaleString('en-PH', {
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 0
-                            })
-                        }
-                        return label
-                    }
-                }
+                enabled: true,
+                mode: 'index',
+                intersect: false
             }
         },
         scales: {
+            x: {
+                grid: {
+                    display: true,
+                    color: 'rgba(0, 0, 0, 0.05)',
+                    drawBorder: false,
+                },
+                ticks: {
+                    autoSkip: false,
+                    maxRotation: 45,
+                    minRotation: 45
+                }
+            },
             y: {
                 beginAtZero: false,
-                ticks: {
-                    callback: function(value) {
-                        return '₱' + (value / 1000).toFixed(0) + 'K'
-                    }
+                grid: {
+                    color: 'rgba(0, 0, 0, 0.1)',
+                    drawBorder: false,
                 }
             }
         }
-    }
-
-    if (loading) {
-        return (
-            <div className={`${pageLayout ? 'col-span-5' : 'col-span-17 xl:col-start-2'} col-start-2 flex items-center justify-center w-full h-full`}>
-                <p className="text-lg">Loading forecasting data...</p>
-            </div>
-        )
-    }
+    };
 
     const downloadForecastReport = () => {
         try {
@@ -396,7 +372,7 @@ export default function ForecastingPage({ pageLayout, currentUser }) {
             const url = window.URL.createObjectURL(blob)
             const link = document.createElement('a')
             link.href = url
-            link.download = `attendance-forecast-report-${new Date().toISOString().split('T')[0]}.csv`
+            link.download = `forecast-report-${new Date().toISOString().split('T')[0]}.csv`
             document.body.appendChild(link)
             link.click()
             document.body.removeChild(link)
@@ -408,28 +384,45 @@ export default function ForecastingPage({ pageLayout, currentUser }) {
         }
     }
 
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center w-full h-screen">
+                <p className="text-lg">Loading forecasting data...</p>
+            </div>
+        )
+    }
+
+    console.log('Forecast months:', payrollForecast.map(f => f.month));
+console.log('All labels:', payrollChartData.labels);
+
     return (
-        <>
-            <div className={`${pageLayout ? 'col-span-5' : 'col-span-17 xl:col-start-2'} col-start-2 flex flex-col w-full min-h-full`}>
-                <Header pageLayout={pageLayout} pageTitle="Forecasting" pageDescription="AI-powered predictions and insights" currentUser={currentUser} />
-                
-                <div className="flex flex-col items-center justify-start h-9/10 w-full p-5 gap-5 overflow-y-scroll">
-                    {/* Header */}
-                    <div className="flex flex-row items-center justify-between w-full">
-                        <div className="flex flex-col items-start justify-start">
-                            <h2 className="text-md font-medium">Attendance & Payroll Forecasting (Machine Learning)</h2>
-                            <p className="font-sans text-sm text-[rgba(0,0,0,0.6)]">AI-powered predictions for attendance hours and payroll trends</p>
+        <div className={`${pageLayout ? 'col-span-5' : 'col-span-17 xl:col-start-2'} col-start-2 flex flex-col w-full min-h-full`}>
+            <Header 
+                pageLayout={pageLayout} 
+                pageTitle="Forecasting" 
+                pageDescription="AI-powered predictions and insights" 
+                currentUser={currentUser} 
+            />
+            
+            <div className="flex-1 overflow-y-auto p-5 bg-gray-50">
+                <div className="w-full space-y-5">
+                    {/* Header Section */}
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        <div>
+                            <h2 className="text-xl font-semibold">Attendance & Payroll Forecasting (Machine Learning)</h2>
+                            <p className="text-gray-600">AI-powered predictions for attendance hours and payroll trends</p>
                         </div>
                         <button
                             onClick={downloadForecastReport}
-                            className="flex flex-row items-center justify-center bg-white h-10 px-4 rounded-lg shadow-md gap-2 text-sm font-medium cursor-pointer hover:bg-gray-100 transition duration-200"
+                            className="flex items-center gap-2 px-4 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors self-start"
                         >
-                            <img src={downloadIcon} alt="download" className="h-4" />
+                            <img src={downloadIcon} className="h-4" alt="download" />
                             Download Report
                         </button>
                     </div>
 
-                    <div className="w-full bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
+                    {/* Forecast Controls */}
+                    <div className="bg-white rounded-2xl border border-gray-200 p-5">
                         <h3 className="font-medium mb-4 flex items-center gap-2">
                             <img src={forecastIcon} className="h-5" alt="forecast" />
                             Forecast Controls
@@ -473,15 +466,30 @@ export default function ForecastingPage({ pageLayout, currentUser }) {
                         </div>
                     </div>
 
-                    {/* Projected Attendance Trends */}
-                    <div className="w-full h-[350px] bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
-                        <div className="flex flex-row items-center gap-2 mb-4">
+                    {/* Attendance Chart */}
+                    <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                        <div className="flex items-center gap-2 mb-4">
                             <img src={chartIcon} className="h-5" alt="chart" />
                             <h3 className="font-medium">Projected Attendance Hours (Next 12 Months)</h3>
                         </div>
-                        <div className="h-[270px]">
-                            {historicalAttendance.length > 0 ? (
-                                <Bar data={attendanceChartData} options={attendanceChartOptions} />
+                        <div className="h-96">
+                            {historicalAttendance.length > 0 || attendanceForecast.length > 0 ? (
+                                <Line 
+                                    data={attendanceChartData} 
+                                    options={{
+                                        ...chartOptions,
+                                        scales: {
+                                            ...chartOptions.scales,
+                                            y: {
+                                                ...chartOptions.scales.y,
+                                                ticks: {
+                                                    ...chartOptions.scales.y.ticks,
+                                                    callback: (value) => `${value.toFixed(0)}h`
+                                                }
+                                            }
+                                        }
+                                    }} 
+                                />
                             ) : (
                                 <div className="flex items-center justify-center h-full text-gray-400">
                                     No attendance data available
@@ -490,15 +498,30 @@ export default function ForecastingPage({ pageLayout, currentUser }) {
                         </div>
                     </div>
 
-                    {/* Projected Payroll Trends */}
-                    <div className="w-full h-[350px] bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
-                        <div className="flex flex-row items-center gap-2 mb-4">
+                    {/* Payroll Chart */}
+                    <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                        <div className="flex items-center gap-2 mb-4">
                             <img src={chartIcon} className="h-5" alt="chart" />
                             <h3 className="font-medium">Projected Payroll Trends (Next 12 Months)</h3>
                         </div>
-                        <div className="h-[270px]">
-                            {historicalPayroll.length > 0 ? (
-                                <Bar data={payrollChartData} options={payrollChartOptions} />
+                        <div className="h-96">
+                            {historicalPayroll.length > 0 || payrollForecast.length > 0 ? (
+                                <Line 
+                                    data={payrollChartData} 
+                                    options={{
+                                        ...chartOptions,
+                                        scales: {
+                                            ...chartOptions.scales,
+                                            y: {
+                                                ...chartOptions.scales.y,
+                                                ticks: {
+                                                    ...chartOptions.scales.y.ticks,
+                                                    callback: (value) => `₱${(value / 1000).toFixed(0)}K`
+                                                }
+                                            }
+                                        }
+                                    }} 
+                                />
                             ) : (
                                 <div className="flex items-center justify-center h-full text-gray-400">
                                     No payroll data available
@@ -507,30 +530,34 @@ export default function ForecastingPage({ pageLayout, currentUser }) {
                         </div>
                     </div>
 
-                    {/* Metrics Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-5 w-full">
-                        {/* Predicted Payroll Growth */}
-                        <div className="bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
+                    {/* Metrics Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                        {/* Payroll Growth */}
+                        <div className="bg-white rounded-2xl border border-gray-200 p-5">
                             <div className="flex items-center gap-2 mb-2">
                                 <img src={trendUpIcon} className="h-5" alt="trend" />
-                                <p className="text-3xl font-semibold">{forecastMetrics.payrollGrowth > 0 ? '+' : ''}{forecastMetrics.payrollGrowth}%</p>
+                                <p className="text-3xl font-semibold">
+                                    {forecastMetrics.payrollGrowth > 0 ? '+' : ''}{forecastMetrics.payrollGrowth}%
+                                </p>
                             </div>
                             <p className="text-sm font-medium text-gray-600">Payroll Growth</p>
                             <p className="text-xs text-gray-500 mt-1">{forecastMetrics.trend} trend</p>
                         </div>
 
-                        {/* Predicted Attendance Growth */}
-                        <div className="bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
+                        {/* Attendance Growth */}
+                        <div className="bg-white rounded-2xl border border-gray-200 p-5">
                             <div className="flex items-center gap-2 mb-2">
                                 <img src={trendUpIcon} className="h-5" alt="trend" />
-                                <p className="text-3xl font-semibold">{forecastMetrics.attendanceGrowth > 0 ? '+' : ''}{forecastMetrics.attendanceGrowth}%</p>
+                                <p className="text-3xl font-semibold">
+                                    {forecastMetrics.attendanceGrowth > 0 ? '+' : ''}{forecastMetrics.attendanceGrowth}%
+                                </p>
                             </div>
                             <p className="text-sm font-medium text-gray-600">Attendance Growth</p>
                             <p className="text-xs text-gray-500 mt-1">Hours projection</p>
                         </div>
 
                         {/* Risk Level */}
-                        <div className="bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
+                        <div className="bg-white rounded-2xl border border-gray-200 p-5">
                             <p className="text-3xl font-semibold mb-2">{forecastMetrics.riskLevel}</p>
                             <p className="text-sm font-medium text-gray-600">Risk Level</p>
                             <div className="w-full bg-gray-200 h-2 rounded-full mt-3">
@@ -543,7 +570,7 @@ export default function ForecastingPage({ pageLayout, currentUser }) {
                         </div>
 
                         {/* Confidence Level */}
-                        <div className="bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
+                        <div className="bg-white rounded-2xl border border-gray-200 p-5">
                             <p className="text-3xl font-semibold mb-2">{modelInfo.confidence}%</p>
                             <p className="text-sm font-medium text-gray-600">Confidence Level</p>
                             <div className="w-full bg-gray-200 h-2 rounded-full mt-3">
@@ -557,6 +584,6 @@ export default function ForecastingPage({ pageLayout, currentUser }) {
                     </div>
                 </div>
             </div>
-        </>
+        </div>
     )
 }

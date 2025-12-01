@@ -208,12 +208,9 @@ router.get("/overall-metrics", async (req, res) => {
     }
 })
 
-// Get individual employee KPI data
 router.get("/:user_id", async (req, res) => {
     try {
         const { user_id } = req.params
-        
-        // Get current month data
         const currentMonthResult = await pool.query(`
             SELECT 
                 COUNT(DISTINCT CASE 
@@ -222,7 +219,7 @@ router.get("/:user_id", async (req, res) => {
                 END) as days_present,
                 COALESCE(SUM(CASE 
                     WHEN a.status = 'checked_out' 
-                    THEN a.total_hours 
+                    THEN a.total_hours
                     ELSE 0 
                 END), 0) as total_hours,
                 COALESCE(AVG(CASE 
@@ -242,8 +239,6 @@ router.get("/:user_id", async (req, res) => {
         `, [user_id])
         
         const currentMonth = currentMonthResult.rows[0]
-        
-        // Get employee info
         const employeeResult = await pool.query(`
             SELECT first_name, last_name, position, hourly_rate
             FROM users
@@ -253,10 +248,7 @@ router.get("/:user_id", async (req, res) => {
         if (employeeResult.rows.length === 0) {
             return res.status(404).json({ message: 'Employee not found' })
         }
-        
         const employee = employeeResult.rows[0]
-        
-        // Calculate working days in current month
         const workingDaysResult = await pool.query(`
             SELECT EXTRACT(DAY FROM DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month' - INTERVAL '1 day') as days
         `)
@@ -264,10 +256,10 @@ router.get("/:user_id", async (req, res) => {
         
         // Define KPI targets
         const targets = {
-            hoursPerMonth: 160, // Standard 8 hours/day * 20 working days
-            attendanceRate: 95, // 95% attendance target
-            avgHoursPerDay: 8, // 8 hours per day target
-            overtimeLimit: 20 // Max 20 hours overtime per month
+            hoursPerMonth: 160,
+            attendanceRate: 95, 
+            avgHoursPerDay: 8, 
+            overtimeLimit: 20 
         }
         
         // Calculate actual values

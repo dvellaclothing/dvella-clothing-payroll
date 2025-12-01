@@ -4,70 +4,12 @@ import pool from '../db/pool.js'
 
 const router = express.Router()
 
-// router.get("/get-total-employees", async (req, res) => {
-//     try {
-//         const addedThisMonth = await pool.query("SELECT COUNT(*) FROM users WHERE role = 'employee' AND hire_date >= CURRENT_DATE - 30")
-//         const totalEmployees = await pool.query("SELECT COUNT(*) FROM users WHERE role = 'employee'")
-//         return res.status(200).json({
-//             addedThisMonth: addedThisMonth.rows[0].count,
-//             totalEmployees: totalEmployees.rows[0].count,
-//         })
-//     } catch (err) {
-//         console.error("get-total-employees: ", err)
-//         return res.status(500).json({ error: "Failed to fetch employees" })
-//     }
-// })
-
-// router.get("/get-monthly-payroll", async (req, res) => {
-//     try {
-//         const currentMonth = await pool.query(`SELECT SUM(net_pay) as total FROM payroll_records WHERE created_at >= CURRENT_DATE - 30`)
-//         const lastMonth = await pool.query(`SELECT SUM(net_pay) as total FROM payroll_records WHERE created_at >= CURRENT_DATE - 60 AND created_at < CURRENT_DATE - 30`)
-//         return res.status(200).json({
-//             currentMonth: currentMonth.rows[0].total || 0,
-//             lastMonth: lastMonth.rows[0].total || 0,
-//         })
-//     } catch (err) {
-//         console.error("get-monthly-payroll: ", err)
-//         return res.status(500).json({ error: "Failed to fetch payroll" })
-//     }
-// })
-
-// router.get("/get-avg-kpi-score", async (req, res) => {
-//     try {
-//         const currentMonth = await pool.query(`SELECT AVG(score) as avg_score FROM kpi_scores WHERE month = EXTRACT(MONTH FROM CURRENT_DATE) AND year = EXTRACT(YEAR FROM CURRENT_DATE)`)
-//         const lastMonth = await pool.query(`SELECT AVG(score) as avg_score FROM kpi_scores WHERE month = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 month') AND year = EXTRACT(YEAR FROM CURRENT_DATE - INTERVAL '1 month')`)
-//         return res.status(200).json({
-//             currentMonth: parseFloat(currentMonth.rows[0].avg_score) || 0,
-//             lastMonth: parseFloat(lastMonth.rows[0].avg_score) || 0
-//         })
-//     } catch (err) {
-//         console.error("get-avg-kpi-score: ", err)
-//         return res.status(500).json({ error: "Failed to fetch KPI scores" })
-//     }
-// })
-
-// router.get("/get-growth-forecast", async (req, res) => {
-//     try {
-//         const lastMonth = await pool.query("SELECT AVG(score) as avg FROM kpi_scores WHERE created_at >= CURRENT_DATE - 30")
-//         const twoMonthsAgo = await pool.query("SELECT AVG(score) as avg FROM kpi_scores WHERE created_at >= CURRENT_DATE - 60 AND created_at < CURRENT_DATE - 30")
-//         const current = parseFloat(lastMonth.rows[0].avg) || 0
-//         const previous = parseFloat(twoMonthsAgo.rows[0].avg) || 0
-//         const growth = current - previous
-//         const forecastPercentage = previous > 0 ? ((growth / previous) * 100).toFixed(1) : 0
-//         return res.status(200).json({
-//             predictedValue: forecastPercentage,
-//             confidence: 87,
-//             period: "Q1 2025"
-//         })
-//     } catch (err) {
-//         console.error("get-growth-forecast: ", err)
-//         return res.status(500).json({ error: "Failed to fetch forecast" })
-//     }
-// })
-
 router.get("/get-total-employees", async (req, res) => {
+    let client;
     try {
-        const result = await pool.query(`
+        client = await pool.connect();
+        
+        const result = await client.query(`
             SELECT 
                 COUNT(*) as total_employees,
                 COUNT(*) FILTER (
@@ -75,93 +17,208 @@ router.get("/get-total-employees", async (req, res) => {
                     AND EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM CURRENT_DATE)
                 ) as added_this_month
             FROM users
-            WHERE status = 'active' AND role IN ('employee', 'manager', 'admin')
-        `)
+            WHERE status = 'active' 
+            AND role IN ('employee', 'manager', 'admin')
+            -- Removed deleted_at check since the column doesn't exist
+        `);
+        
+        const total = parseInt(result.rows[0].total_employees) || 0;
+        const addedThisMonth = parseInt(result.rows[0].added_this_month) || 0;
         
         return res.json({
-            totalEmployees: parseInt(result.rows[0].total_employees),
-            addedThisMonth: parseInt(result.rows[0].added_this_month)
-        })
+            totalEmployees: total,
+            addedThisMonth: addedThisMonth
+        });
     } catch (err) {
-        console.error('Error in get-total-employees:', err)
-        return res.status(500).json({ error: err.message })
+        console.error('Error in get-total-employees:', {
+            error: err.message,
+            code: err.code
+        });
+        return res.status(500).json({ 
+            error: "Failed to fetch employees",
+            details: err.message
+        });
+    } finally {
+        if (client) client.release();
     }
-})
+});
 
 router.get("/get-monthly-payroll", async (req, res) => {
     try {
-        const currentMonth = await pool.query(`
-            SELECT 
-                COALESCE(SUM(
-                    CASE 
-                        WHEN a.total_hours <= 8 THEN a.total_hours * COALESCE(u.hourly_rate, 0)
-                        ELSE (8 * COALESCE(u.hourly_rate, 0)) + 
-                             ((a.total_hours - 8) * COALESCE(u.hourly_rate, 0) * 1.5)
-                    END
-                ), 0) as total_gross
-            FROM attendance a
-            INNER JOIN users u ON a.user_id = u.user_id
-            WHERE a.status = 'checked_out'
-                AND EXTRACT(MONTH FROM a.date) = EXTRACT(MONTH FROM CURRENT_DATE)
-                AND EXTRACT(YEAR FROM a.date) = EXTRACT(YEAR FROM CURRENT_DATE)
-        `)
+        const [currentMonth, lastMonth] = await Promise.all([
+            pool.query(`
+                SELECT 
+                    COALESCE(SUM(
+                        CASE 
+                            WHEN a.total_hours <= 8 THEN 
+                                a.total_hours * COALESCE(u.hourly_rate, 0)
+                            ELSE 
+                                (8 * COALESCE(u.hourly_rate, 0)) + 
+                                ((a.total_hours - 8) * COALESCE(u.hourly_rate, 0) * 1.5)
+                        END
+                    ), 0) as total_gross,
+                    COUNT(DISTINCT a.user_id) as employee_count
+                FROM attendance a
+                INNER JOIN users u ON a.user_id = u.user_id
+                WHERE a.status = 'checked_out'
+                    AND EXTRACT(MONTH FROM a.date) = EXTRACT(MONTH FROM CURRENT_DATE)
+                    AND EXTRACT(YEAR FROM a.date) = EXTRACT(YEAR FROM CURRENT_DATE)
+            `),
+            pool.query(`
+                SELECT 
+                    COALESCE(SUM(
+                        CASE 
+                            WHEN a.total_hours <= 8 THEN 
+                                a.total_hours * COALESCE(u.hourly_rate, 0)
+                            ELSE 
+                                (8 * COALESCE(u.hourly_rate, 0)) + 
+                                ((a.total_hours - 8) * COALESCE(u.hourly_rate, 0) * 1.5)
+                        END
+                    ), 0) as total_gross
+                FROM attendance a
+                INNER JOIN users u ON a.user_id = u.user_id
+                WHERE a.status = 'checked_out'
+                    AND EXTRACT(MONTH FROM a.date) = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 month')
+                    AND EXTRACT(YEAR FROM a.date) = EXTRACT(YEAR FROM CURRENT_DATE - INTERVAL '1 month')
+            `)
+        ])
 
-        const lastMonth = await pool.query(`
-            SELECT 
-                COALESCE(SUM(
-                    CASE 
-                        WHEN a.total_hours <= 8 THEN a.total_hours * COALESCE(u.hourly_rate, 0)
-                        ELSE (8 * COALESCE(u.hourly_rate, 0)) + 
-                             ((a.total_hours - 8) * COALESCE(u.hourly_rate, 0) * 1.5)
-                    END
-                ), 0) as total_gross
-            FROM attendance a
-            INNER JOIN users u ON a.user_id = u.user_id
-            WHERE a.status = 'checked_out'
-                AND EXTRACT(MONTH FROM a.date) = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 month')
-                AND EXTRACT(YEAR FROM a.date) = EXTRACT(YEAR FROM CURRENT_DATE - INTERVAL '1 month')
-        `)
+        const currentGross = parseFloat(currentMonth.rows[0].total_gross) || 0
+        const lastMonthGross = parseFloat(lastMonth.rows[0].total_gross) || 0
+        const employeeCount = parseInt(currentMonth.rows[0].employee_count) || 0
         
-        const currentNet = parseFloat(currentMonth.rows[0].total_gross) * 0.85
-        const lastNet = parseFloat(lastMonth.rows[0].total_gross) * 0.85
+        // Calculate net pay (15% deduction)
+        const currentNet = currentGross * 0.85
+        const lastMonthNet = lastMonthGross * 0.85
         
+        // Calculate percentage change
+        const change = currentNet - lastMonthNet
+        const percentage = lastMonthNet > 0 ? (change / lastMonthNet) * 100 : 100
+
         return res.json({
             currentMonth: parseFloat(currentNet.toFixed(2)),
-            lastMonth: parseFloat(lastNet.toFixed(2))
+            lastMonth: parseFloat(lastMonthNet.toFixed(2)),
+            change: parseFloat(change.toFixed(2)),
+            percentage: parseFloat(percentage.toFixed(1)),
+            employeeCount: employeeCount
         })
     } catch (err) {
         console.error('Error in get-monthly-payroll:', err)
-        return res.status(500).json({ error: err.message })
+        return res.status(500).json({ 
+            error: "Failed to fetch payroll data",
+            details: process.env.NODE_ENV === 'development' ? err.message : undefined
+        })
     }
 })
 
 router.get("/get-avg-kpi-score", async (req, res) => {
+    let client;
     try {
-        const currentMonth = await pool.query(`
-            SELECT 
-                COALESCE(AVG(score), 0) as avg_score
-            FROM kpi_scores
-            WHERE EXTRACT(MONTH FROM TO_DATE(month || '-' || year, 'MM-YYYY')) = EXTRACT(MONTH FROM CURRENT_DATE)
-                AND year = EXTRACT(YEAR FROM CURRENT_DATE)
-        `)
+        client = await pool.connect();
+
+        // First check if kpi_scores table exists
+        const tableCheck = await client.query(`
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'kpi_scores'
+            )
+        `);
         
-        const lastMonth = await pool.query(`
-            SELECT 
-                COALESCE(AVG(score), 0) as avg_score
-            FROM kpi_scores
-            WHERE EXTRACT(MONTH FROM TO_DATE(month || '-' || year, 'MM-YYYY')) = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 month')
-                AND year = EXTRACT(YEAR FROM CURRENT_DATE - INTERVAL '1 month')
-        `)
+        if (!tableCheck.rows[0].exists) {
+            console.warn("KPI scores table doesn't exist, returning default values");
+            return res.json({
+                currentMonth: 0,
+                lastMonth: 0,
+                change: 0,
+                percentage: 0,
+                employeeCount: 0
+            });
+        }
+
+        // Get the actual column names from the kpi_scores table
+        const columns = await client.query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'kpi_scores'
+        `);
         
+        const hasDateColumn = columns.rows.some(col => 
+            ['evaluation_date', 'created_at', 'date'].includes(col.column_name)
+        );
+
+        if (!hasDateColumn) {
+            // If no date column exists, just get the latest scores
+            const scores = await client.query(`
+                SELECT 
+                    COALESCE(AVG(score), 0) as avg_score,
+                    COUNT(DISTINCT user_id) as employee_count
+                FROM kpi_scores
+            `);
+            
+            const avgScore = parseFloat(scores.rows[0].avg_score) || 0;
+            
+            return res.json({
+                currentMonth: parseFloat(avgScore.toFixed(1)),
+                lastMonth: 0,
+                change: 0,
+                percentage: 0,
+                employeeCount: parseInt(scores.rows[0].employee_count) || 0
+            });
+        }
+
+        // Determine which date column to use
+        const dateColumn = columns.rows.some(col => col.column_name === 'evaluation_date') 
+            ? 'evaluation_date' 
+            : columns.rows.some(col => col.column_name === 'date')
+                ? 'date'
+                : 'created_at';
+
+        const [currentMonth, lastMonth] = await Promise.all([
+            client.query(`
+                SELECT 
+                    COALESCE(AVG(score), 0) as avg_score,
+                    COUNT(DISTINCT user_id) as employee_count
+                FROM kpi_scores
+                WHERE EXTRACT(MONTH FROM ${dateColumn}) = EXTRACT(MONTH FROM CURRENT_DATE)
+                AND EXTRACT(YEAR FROM ${dateColumn}) = EXTRACT(YEAR FROM CURRENT_DATE)
+            `),
+            client.query(`
+                SELECT 
+                    COALESCE(AVG(score), 0) as avg_score
+                FROM kpi_scores
+                WHERE EXTRACT(MONTH FROM ${dateColumn}) = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 month')
+                AND EXTRACT(YEAR FROM ${dateColumn}) = EXTRACT(YEAR FROM CURRENT_DATE - INTERVAL '1 month')
+            `)
+        ]);
+
+        const currentScore = parseFloat(currentMonth.rows[0].avg_score) || 0;
+        const lastMonthScore = parseFloat(lastMonth.rows[0].avg_score) || 0;
+        const employeeCount = parseInt(currentMonth.rows[0].employee_count) || 0;
+        const change = currentScore - lastMonthScore;
+        const percentage = lastMonthScore > 0 ? (change / lastMonthScore) * 100 : 0;
+
         return res.json({
-            currentMonth: parseFloat(currentMonth.rows[0].avg_score) || 0,
-            lastMonth: parseFloat(lastMonth.rows[0].avg_score) || 0
-        })
+            currentMonth: parseFloat(currentScore.toFixed(1)),
+            lastMonth: parseFloat(lastMonthScore.toFixed(1)),
+            change: parseFloat(change.toFixed(1)),
+            percentage: parseFloat(percentage.toFixed(1)),
+            employeeCount: employeeCount
+        });
     } catch (err) {
-        console.error('Error in get-avg-kpi-score:', err)
-        return res.status(500).json({ error: err.message })
+        console.error('Error in get-avg-kpi-score:', {
+            error: err.message,
+            code: err.code,
+            query: err.query
+        });
+        return res.status(500).json({ 
+            error: "Failed to fetch KPI scores",
+            details: err.message
+        });
+    } finally {
+        if (client) client.release();
     }
-})
+});
 
 router.get("/get-recent-activities", async (req, res) => {
     try {
@@ -203,9 +260,9 @@ router.get("/get-recent-activities", async (req, res) => {
 
 router.get("/get-upcoming-payroll", async (req, res) => {
     try {
+        // Get the next upcoming payroll period
         const nextPeriod = await pool.query(`
             SELECT 
-                period_id,
                 period_name,
                 start_date,
                 end_date,
@@ -218,24 +275,29 @@ router.get("/get-upcoming-payroll", async (req, res) => {
         `)
         
         if (nextPeriod.rows.length === 0) {
-            return res.json({ 
-                period: null,
-                message: 'No upcoming payroll periods found' 
+            // Return default values if no upcoming payroll
+            return res.json({
+                period_name: "No Upcoming Payroll",
+                start_date: new Date().toISOString().split('T')[0],
+                end_date: new Date().toISOString().split('T')[0],
+                pay_date: new Date().toISOString().split('T')[0],
+                employee_count: 0,
+                estimated_amount: 0,
+                status: "closed"
             })
         }
         
         const period = nextPeriod.rows[0]
         
+        // Get total active employees
         const employeeCount = await pool.query(`
-            SELECT COUNT(DISTINCT u.user_id) as count
-            FROM users u
-            INNER JOIN attendance a ON u.user_id = a.user_id
-            WHERE u.status = 'active'
-                AND u.role IN ('employee', 'manager')
-                AND a.status = 'checked_out'
-                AND a.date BETWEEN $1 AND $2
-        `, [period.start_date, period.end_date])
+            SELECT COUNT(*) as count
+            FROM users
+            WHERE status = 'active' 
+            AND role IN ('employee', 'manager')
+        `)
         
+        // Calculate estimated payroll amount
         const estimatedAmount = await pool.query(`
             SELECT 
                 COALESCE(SUM(
@@ -251,16 +313,29 @@ router.get("/get-upcoming-payroll", async (req, res) => {
                 AND a.date BETWEEN $1 AND $2
         `, [period.start_date, period.end_date])
         
+        // Format the response to match frontend expectations
         return res.json({
-            period: {
-                ...period,
-                employee_count: parseInt(employeeCount.rows[0].count),
-                estimated_amount: parseFloat(estimatedAmount.rows[0].estimated_net).toFixed(2)
-            }
+            period_name: period.period_name,
+            start_date: period.start_date.toISOString().split('T')[0],
+            end_date: period.end_date.toISOString().split('T')[0],
+            pay_date: period.pay_date.toISOString().split('T')[0],
+            employee_count: parseInt(employeeCount.rows[0].count) || 0,
+            estimated_amount: parseFloat(estimatedAmount.rows[0].estimated_net) || 0,
+            status: period.status || "open"
         })
+        
     } catch (err) {
         console.error('Error in get-upcoming-payroll:', err)
-        return res.status(500).json({ error: err.message })
+        // Return default values in case of error
+        return res.json({
+            period_name: "Error Loading Payroll",
+            start_date: new Date().toISOString().split('T')[0],
+            end_date: new Date().toISOString().split('T')[0],
+            pay_date: new Date().toISOString().split('T')[0],
+            employee_count: 0,
+            estimated_amount: 0,
+            status: "error"
+        })
     }
 })
 

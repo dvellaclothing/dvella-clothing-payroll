@@ -55,19 +55,15 @@ export default function KPIPage({ pageLayout, currentUser }) {
         try {
             setLoading(true)
 
-            // Fetch top performers
             const topRes = await fetch(`${API_URL}/api/kpi/top-performers?period=${period}`)
             const topData = await topRes.json()
 
-            // Fetch bottom performers
             const bottomRes = await fetch(`${API_URL}/api/kpi/bottom-performers?period=${period}`)
             const bottomData = await bottomRes.json()
 
-            // Fetch monthly trends
             const trendsRes = await fetch(`${API_URL}/api/kpi/monthly-trends`)
             const trendsData = await trendsRes.json()
 
-            // Fetch overall metrics
             const metricsRes = await fetch(`${API_URL}/api/kpi/overall-metrics?period=${period}`)
             const metricsData = await metricsRes.json()
 
@@ -94,7 +90,6 @@ export default function KPIPage({ pageLayout, currentUser }) {
             reportSections.push(`Period: ${period === 'monthly' ? 'Current Month' : 'Current Quarter'}`)
             reportSections.push('')
             
-            // Overall Metrics
             reportSections.push('OVERALL PERFORMANCE METRICS')
             reportSections.push(`Total Employees,${kpiData.overallMetrics.totalEmployees}`)
             reportSections.push(`Total Hours Worked,${kpiData.overallMetrics.totalHours.toFixed(1)}`)
@@ -103,7 +98,6 @@ export default function KPIPage({ pageLayout, currentUser }) {
             reportSections.push(`Total Overtime Hours,${kpiData.overallMetrics.totalOvertimeHours.toFixed(1)}`)
             reportSections.push('')
             
-            // Top Performers
             reportSections.push('TOP PERFORMERS (By Working Hours)')
             reportSections.push('Rank,Employee Name,Employee ID,Total Hours,Days Present,Avg Hours/Day,Overtime Hours,Attendance Rate')
             kpiData.topPerformers.forEach((emp, index) => {
@@ -111,7 +105,6 @@ export default function KPIPage({ pageLayout, currentUser }) {
             })
             reportSections.push('')
             
-            // Bottom Performers
             reportSections.push('EMPLOYEES NEEDING ATTENTION (Low Working Hours)')
             reportSections.push('Employee Name,Employee ID,Total Hours,Days Present,Avg Hours/Day,Overtime Hours,Attendance Rate')
             kpiData.bottomPerformers.forEach(emp => {
@@ -119,7 +112,6 @@ export default function KPIPage({ pageLayout, currentUser }) {
             })
             reportSections.push('')
             
-            // Monthly Trends
             reportSections.push('MONTHLY ATTENDANCE TRENDS (Last 12 Months)')
             reportSections.push('Month,Total Hours,Unique Employees,Avg Hours per Employee,Total Days')
             kpiData.monthlyTrends.forEach(trend => {
@@ -144,16 +136,17 @@ export default function KPIPage({ pageLayout, currentUser }) {
         }
     }
 
-    // Top Performers Chart
     const topPerformersChartData = {
         labels: kpiData.topPerformers.map(p => `${p.first_name} ${p.last_name}`),
         datasets: [
             {
                 label: 'Total Hours',
                 data: kpiData.topPerformers.map(p => parseFloat(p.total_hours)),
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                borderColor: 'rgb(0, 0, 0)',
-                borderWidth: 1
+                backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                borderColor: 'rgb(59, 130, 246)',
+                borderWidth: 2,
+                borderRadius: 8,
+                borderSkipped: false,
             }
         ]
     }
@@ -161,49 +154,107 @@ export default function KPIPage({ pageLayout, currentUser }) {
     const topPerformersChartOptions = {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: {
+            mode: 'index',
+            intersect: false,
+        },
         plugins: {
             legend: {
                 display: false
             },
             tooltip: {
+                enabled: true,
+                backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                padding: 12,
+                cornerRadius: 8,
+                titleFont: {
+                    size: 13,
+                    weight: '600',
+                },
+                bodyFont: {
+                    size: 12,
+                },
+                displayColors: true,
+                boxPadding: 6,
                 callbacks: {
                     label: function(context) {
-                        return `${context.parsed.y.toFixed(1)} hours`
+                        const emp = kpiData.topPerformers[context.dataIndex]
+                        return [
+                            `Hours Worked: ${context.parsed.y.toFixed(1)}h`,
+                            `Attendance: ${parseFloat(emp.attendance_rate).toFixed(1)}%`
+                        ]
                     }
                 }
             }
         },
         scales: {
+            x: {
+                grid: {
+                    display: false,
+                },
+                ticks: {
+                    font: {
+                        size: 11,
+                    },
+                    maxRotation: 45,
+                    minRotation: 45,
+                }
+            },
             y: {
                 beginAtZero: true,
+                grid: {
+                    color: 'rgba(0, 0, 0, 0.05)',
+                    drawBorder: false,
+                },
                 ticks: {
+                    font: {
+                        size: 11,
+                    },
+                    padding: 8,
                     callback: function(value) {
                         return value.toFixed(0) + 'h'
                     }
                 }
             }
+        },
+        animation: {
+            duration: 750,
+            easing: 'easeInOutQuart',
         }
     }
 
-    // Monthly Trends Chart
     const monthlyTrendsChartData = {
         labels: kpiData.monthlyTrends.map(t => `${t.month_name} ${t.year}`),
         datasets: [
             {
                 label: 'Total Hours',
                 data: kpiData.monthlyTrends.map(t => parseFloat(t.total_hours)),
-                borderColor: 'rgb(0, 0, 0)',
-                backgroundColor: 'rgba(0, 0, 0, 0.1)',
-                tension: 0.4,
-                fill: true
+                borderColor: 'rgb(59, 130, 246)',
+                backgroundColor: 'transparent',
+                tension: 0,
+                fill: false,
+                pointBackgroundColor: 'rgb(59, 130, 246)',
+                pointBorderColor: 'rgb(59, 130, 246)',
+                pointBorderWidth: 2,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                pointHitRadius: 10,
+                borderWidth: 2,
             },
             {
-                label: 'Avg Hours per Employee',
+                label: 'Avg Hours/Employee',
                 data: kpiData.monthlyTrends.map(t => parseFloat(t.avg_hours_per_employee)),
-                borderColor: 'rgb(150, 150, 150)',
-                backgroundColor: 'rgba(150, 150, 150, 0.1)',
-                tension: 0.4,
-                fill: true
+                borderColor: 'rgb(220, 38, 38)',
+                backgroundColor: 'transparent',
+                tension: 0,
+                fill: false,
+                pointBackgroundColor: 'rgb(220, 38, 38)',
+                pointBorderColor: 'rgb(220, 38, 38)',
+                pointBorderWidth: 2,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                pointHitRadius: 10,
+                borderWidth: 2,
             }
         ]
     }
@@ -211,16 +262,40 @@ export default function KPIPage({ pageLayout, currentUser }) {
     const monthlyTrendsChartOptions = {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: {
+            mode: 'index',
+            intersect: false,
+        },
         plugins: {
             legend: {
                 display: true,
-                position: 'bottom',
+                position: 'top',
+                align: 'end',
                 labels: {
                     usePointStyle: true,
-                    padding: 15
+                    padding: 20,
+                    font: {
+                        size: 12,
+                        family: "'Inter', sans-serif",
+                    },
+                    boxWidth: 8,
+                    boxHeight: 8,
                 }
             },
             tooltip: {
+                enabled: true,
+                backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                padding: 12,
+                cornerRadius: 8,
+                titleFont: {
+                    size: 13,
+                    weight: '600',
+                },
+                bodyFont: {
+                    size: 12,
+                },
+                displayColors: true,
+                boxPadding: 6,
                 callbacks: {
                     label: function(context) {
                         return `${context.dataset.label}: ${context.parsed.y.toFixed(1)} hours`
@@ -229,14 +304,45 @@ export default function KPIPage({ pageLayout, currentUser }) {
             }
         },
         scales: {
+            x: {
+                grid: {
+                    display: true,
+                    color: 'rgba(0, 0, 0, 0.05)',
+                    drawBorder: false,
+                },
+                ticks: {
+                    font: {
+                        size: 11,
+                    },
+                    maxRotation: 45,
+                    minRotation: 45,
+                }
+            },
             y: {
                 beginAtZero: true,
+                grid: {
+                    color: 'rgba(0, 0, 0, 0.1)',
+                    drawBorder: false,
+                },
                 ticks: {
+                    font: {
+                        size: 11,
+                    },
+                    padding: 8,
                     callback: function(value) {
                         return value.toFixed(0) + 'h'
                     }
                 }
             }
+        },
+        elements: {
+            line: {
+                tension: 0,
+            }
+        },
+        animation: {
+            duration: 750,
+            easing: 'easeInOutQuart',
         }
     }
 
@@ -254,7 +360,6 @@ export default function KPIPage({ pageLayout, currentUser }) {
                 <Header pageLayout={pageLayout} pageTitle="Performance KPIs" pageDescription="Employee performance metrics and analytics" currentUser={currentUser} />
                 
                 <div className="flex flex-col items-center justify-start h-9/10 w-full p-5 gap-5 overflow-y-scroll">
-                    {/* Header */}
                     <div className="flex flex-row items-center justify-between w-full">
                         <div className="flex flex-col items-start justify-start">
                             <h2 className="text-md font-medium">Employee KPI Dashboard</h2>
@@ -269,7 +374,6 @@ export default function KPIPage({ pageLayout, currentUser }) {
                         </button>
                     </div>
 
-                    {/* Period Selection */}
                     <div className="w-full bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
                         <h3 className="font-medium mb-4 flex items-center gap-2">
                             <img src={kpiIcon} className="h-5" alt="kpi" />
@@ -304,7 +408,6 @@ export default function KPIPage({ pageLayout, currentUser }) {
                         </div>
                     </div>
 
-                    {/* Overall Metrics Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 w-full">
                         <div className="bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
                             <div className="flex items-center gap-2 mb-2">
@@ -329,7 +432,7 @@ export default function KPIPage({ pageLayout, currentUser }) {
                             <p className="text-sm font-medium text-gray-600">Attendance Rate</p>
                             <div className="w-full bg-gray-200 h-2 rounded-full mt-3">
                                 <div
-                                    className="bg-black h-full rounded-full transition-all duration-500"
+                                    className="bg-blue-500 h-full rounded-full transition-all duration-500"
                                     style={{ width: `${Math.min(kpiData.overallMetrics.avgAttendanceRate, 100)}%` }}
                                 ></div>
                             </div>
@@ -347,8 +450,7 @@ export default function KPIPage({ pageLayout, currentUser }) {
                             </p>
                         </div>
                     </div>
-
-                    {/* Top Performers Chart */}
+                    
                     <div className="w-full h-[350px] bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
                         <div className="flex flex-row items-center gap-2 mb-4">
                             <img src={chartIcon} className="h-5" alt="chart" />
@@ -364,8 +466,7 @@ export default function KPIPage({ pageLayout, currentUser }) {
                             )}
                         </div>
                     </div>
-
-                    {/* Monthly Trends Chart */}
+                    
                     <div className="w-full h-[350px] bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
                         <div className="flex flex-row items-center gap-2 mb-4">
                             <img src={chartIcon} className="h-5" alt="chart" />
@@ -382,7 +483,6 @@ export default function KPIPage({ pageLayout, currentUser }) {
                         </div>
                     </div>
 
-                    {/* Top Performers Table */}
                     <div className="w-full bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
                         <h3 className="font-medium mb-4">Top 10 Performers - Detailed View</h3>
                         <div className="overflow-x-auto">
@@ -433,7 +533,6 @@ export default function KPIPage({ pageLayout, currentUser }) {
                         </div>
                     </div>
 
-                    {/* Bottom Performers Table */}
                     <div className="w-full bg-white rounded-2xl border border-[rgba(0,0,0,0.2)] p-5">
                         <h3 className="font-medium mb-4">Employees Needing Attention (Low Working Hours)</h3>
                         <div className="overflow-x-auto">
